@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Body -->
+  <ellipse cx="100" cy="120" rx="50" ry="45" fill="#ffeb3b" stroke="#000" stroke-width="2"/>
+  
+  <!-- Head -->
+  <circle cx="100" cy="70" r="35" fill="#ffeb3b" stroke="#000" stroke-width="2"/>
+  
+  <!-- Bill -->
+  <ellipse cx="115" cy="75" rx="25" ry="12" fill="#ffa500" stroke="#000" stroke-width="2"/>
+  <line x1="100" y1="75" x2="130" y2="75" stroke="#000" stroke-width="2"/>
+  
+  <!-- Eyes -->
+  <circle cx="90" cy="65" r="6" fill="#000"/>
+  <circle cx="92" cy="63" r="2" fill="#fff"/>
+  
+  <!-- Wing -->
+  <ellipse cx="80" cy="120" rx="20" ry="30" fill="#ffd700" stroke="#000" stroke-width="2"/>
+  
+  <!-- Feet -->
+  <path d="M 85 160 L 80 175 L 75 175 M 85 160 L 85 175 M 85 160 L 90 175 L 95 175" 
+        stroke="#ffa500" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M 115 160 L 110 175 L 105 175 M 115 160 L 115 175 M 115 160 L 120 175 L 125 175" 
+        stroke="#ffa500" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Head -->
+  <circle cx="100" cy="100" r="60" fill="#8b4513" stroke="#000" stroke-width="2"/>
+  
+  <!-- Ears (floppy) -->
+  <ellipse cx="55" cy="90" rx="20" ry="40" fill="#8b4513" stroke="#000" stroke-width="2"/>
+  <ellipse cx="145" cy="90" rx="20" ry="40" fill="#8b4513" stroke="#000" stroke-width="2"/>
+  
+  <!-- Snout -->
+  <ellipse cx="100" cy="120" rx="30" ry="25" fill="#d2691e" stroke="#000" stroke-width="2"/>
+  
+  <!-- Eyes -->
+  <circle cx="80" cy="85" r="8" fill="#000"/>
+  <circle cx="120" cy="85" r="8" fill="#000"/>
+  <circle cx="82" cy="83" r="3" fill="#fff"/>
+  <circle cx="122" cy="83" r="3" fill="#fff"/>
+  
+  <!-- Nose -->
+  <ellipse cx="100" cy="115" rx="10" ry="8" fill="#000"/>
+  
+  <!-- Mouth -->
+  <path d="M 100 115 L 100 125" stroke="#000" stroke-width="2"/>
+  <path d="M 100 125 Q 85 135 75 130" stroke="#000" stroke-width="2" fill="none"/>
+  <path d="M 100 125 Q 115 135 125 130" stroke="#000" stroke-width="2" fill="none"/>
+  
+  <!-- Tongue -->
+  <ellipse cx="100" cy="135" rx="8" ry="5" fill="#ff69b4"/>
+</svg>

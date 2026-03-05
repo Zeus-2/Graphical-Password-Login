@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="B-Team Login System - Secure authentication using image recognition">
+    <title>B-Team Login System</title>
+    <link rel="icon" type="image/svg+xml" href="public/favicon.svg">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header role="banner">
+        <h1>B-Team Login System</h1>
+        <button id="accessibility-toggle" class="accessibility-toggle" aria-label="Open accessibility settings">
+            ⚙️ Settings
+        </button>
+    </header>
+
+    <main role="main">
+        <!-- Login View -->
+        <section id="login-view" class="view" aria-labelledby="login-heading">
+            <h2 id="login-heading">Login</h2>
+            
+            <div class="user-input-container">
+                <label for="login-user-id">What's your name?</label>
+                <input 
+                    type="text" 
+                    id="login-user-id" 
+                    name="userId" 
+                    aria-required="true"
+                    aria-describedby="login-user-help"
+                    placeholder="Type your name here"
+                >
+                <p id="login-user-help" class="help-text">Type your name to start</p>
+                <button 
+                    id="start-login-btn" 
+                    type="button"
+                    aria-label="Start login"
+                >
+                    Let's Go!
+                </button>
+            </div>
+
+            <!-- Image Grid Container (populated dynamically) -->
+            <div 
+                id="image-grid-container" 
+                class="image-grid-container hidden"
+                role="region"
+                aria-labelledby="image-grid-heading"
+            >
+                <h3 id="image-grid-heading">Find Your Animal!</h3>
+                <div 
+                    id="image-grid" 
+                    class="image-grid"
+                    role="group"
+                    aria-label="Image selection grid"
+                >
+                    <!-- Images will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <!-- Property Prompt Container (populated dynamically) -->
+            <div 
+                id="property-prompt-container" 
+                class="property-prompt-container hidden"
+                role="region"
+                aria-labelledby="property-prompt-heading"
+            >
+                <h3 id="property-prompt-heading">Answer the Question!</h3>
+                <p id="property-question" class="property-question" aria-live="polite">
+                    <!-- Property question will be dynamically inserted here -->
+                </p>
+                <div 
+                    id="property-options" 
+                    class="property-options"
+                    role="group"
+                    aria-labelledby="property-prompt-heading"
+                >
+                    <!-- Property buttons will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <!-- Authentication Result (populated dynamically) -->
+            <div 
+                id="auth-result" 
+                class="auth-result hidden"
+                role="alert"
+                aria-live="assertive"
+            >
+                <!-- Success or failure message will be dynamically inserted here -->
+            </div>
+
+            <div class="view-switch">
+                <p>First time here? <a href="#" id="show-register-link">Sign up!</a></p>
+                <p><a href="#" id="show-teacher-link">Teacher Login</a></p>
+            </div>
+        </section>
+
+        <!-- Registration View -->
+        <section id="registration-view" class="view hidden" aria-labelledby="registration-heading">
+            <h2 id="registration-heading">Register</h2>
+            
+            <div class="user-input-container">
+                <label for="register-user-id">What's your name?</label>
+                <input 
+                    type="text" 
+                    id="register-user-id" 
+                    name="userId" 
+                    aria-required="true"
+                    aria-describedby="register-user-help"
+                    placeholder="Type your name here"
+                >
+                <p id="register-user-help" class="help-text">We'll use your name to remember you</p>
+            </div>
+
+            <!-- Available Images Container (populated dynamically) -->
+            <div 
+                id="available-images-container" 
+                class="available-images-container"
+                role="region"
+                aria-labelledby="available-images-heading"
+            >
+                <h3 id="available-images-heading">Pick Your Favorite Animal!</h3>
+                <div 
+                    id="available-images" 
+                    class="image-grid"
+                    role="group"
+                    aria-label="Available images for registration"
+                >
+                    <!-- Available images will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <!-- Image Properties Preview (populated dynamically) -->
+            <div 
+                id="image-properties-preview" 
+                class="image-properties-preview hidden"
+                role="region"
+                aria-labelledby="properties-preview-heading"
+            >
+                <h3 id="properties-preview-heading">Image Properties</h3>
+                <dl id="properties-list" aria-label="Selected image properties">
+                    <!-- Properties will be dynamically inserted here -->
+                </dl>
+            </div>
+
+            <button 
+                id="submit-registration-btn" 
+                type="button"
+                class="hidden"
+                aria-label="Complete registration"
+            >
+                All Done!
+            </button>
+
+            <!-- Registration Result (populated dynamically) -->
+            <div 
+                id="registration-result" 
+                class="registration-result hidden"
+                role="alert"
+                aria-live="assertive"
+            >
+                <!-- Success or failure message will be dynamically inserted here -->
+            </div>
+
+            <div class="view-switch">
+                <p>Already signed up? <a href="#" id="show-login-link">Go to login!</a></p>
+            </div>
+        </section>
+
+        <!-- Dashboard View -->
+        <section id="dashboard-view" class="view hidden" aria-labelledby="dashboard-heading">
+            <h2 id="dashboard-heading">Dashboard</h2>
+            
+            <div class="dashboard-content">
+                <p id="welcome-message" class="welcome-message">
+                    <!-- Welcome message will be dynamically inserted here -->
+                </p>
+                
+                <div class="dashboard-info">
+                    <h3>You're In! 🎉</h3>
+                    <p>Great job logging in! Now let's play a game!</p>
+                </div>
+
+                <!-- Memory Game -->
+                <div class="game-container">
+                    <div class="game-header">
+                        <h3>🎮 Animal Memory Match</h3>
+                        <div class="game-stats">
+                            <div class="stat">
+                                <span class="stat-label">Moves:</span>
+                                <span id="game-moves" class="stat-value">0</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Matches:</span>
+                                <span id="game-matches" class="stat-value">0/6</span>
+                            </div>
+                        </div>
+                        <button id="game-reset-btn" type="button" class="game-btn">New Game</button>
+                    </div>
+                    
+                    <div id="game-board" class="game-board">
+                        <!-- Game cards will be inserted here -->
+                    </div>
+                    
+                    <div id="game-win-message" class="game-win-message hidden">
+                        <div class="win-content">
+                            <h4>🎉 You Won! 🎉</h4>
+                            <p>Great memory! You matched all the animals!</p>
+                            <p class="win-stats">Moves: <span id="final-moves">0</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <button 
+                    id="logout-btn" 
+                    type="button"
+                    aria-label="Logout from dashboard"
+                >
+                    Logout
+                </button>
+            </div>
+        </section>
+
+        <!-- Teacher Portal View -->
+        <section id="teacher-view" class="view hidden" aria-labelledby="teacher-heading">
+            <h2 id="teacher-heading">Teacher Portal</h2>
+            
+            <div id="teacher-login-form">
+                <div class="user-input-container">
+                    <label for="teacher-username">Teacher Username</label>
+                    <input 
+                        type="text" 
+                        id="teacher-username" 
+                        placeholder="Enter username"
+                    >
+                </div>
+                
+                <div class="user-input-container">
+                    <label for="teacher-password">Password</label>
+                    <input 
+                        type="password" 
+                        id="teacher-password" 
+                        placeholder="Enter password"
+                    >
+                </div>
+                
+                <button id="teacher-login-btn" type="button">Login as Teacher</button>
+                
+                <div id="teacher-login-result" class="auth-result hidden"></div>
+                
+                <div class="view-switch">
+                    <p><a href="#" id="back-to-student-login">Back to Student Login</a></p>
+                </div>
+            </div>
+
+            <div id="teacher-dashboard" class="hidden">
+                <p class="welcome-message" id="teacher-welcome"></p>
+                
+                <div class="teacher-actions">
+                    <h3>Manage Students</h3>
+                    <div id="student-list"></div>
+                </div>
+                
+                <button id="teacher-logout-btn" type="button">Logout</button>
+            </div>
+        </section>
+    </main>
+
+    <footer role="contentinfo">
+        <p>&copy; 2026 B-Team Login System</p>
+    </footer>
+
+    <!-- Loading Indicator -->
+    <div id="loading-indicator" class="loading-indicator hidden" role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Loading...</p>
+    </div>
+
+    <!-- Accessibility Settings Panel -->
+    <div id="accessibility-panel" class="accessibility-panel hidden" role="dialog" aria-labelledby="accessibility-heading">
+        <div class="accessibility-content">
+            <h2 id="accessibility-heading">Accessibility Settings</h2>
+            <button id="close-accessibility" class="close-btn" aria-label="Close settings">✕</button>
+            
+            <div class="setting-group">
+                <h3>Theme</h3>
+                <div class="button-group">
+                    <button id="theme-light" class="setting-btn" data-theme="light">☀️ Light Mode</button>
+                    <button id="theme-dark" class="setting-btn" data-theme="dark">🌙 Dark Mode</button>
+                    <button id="theme-auto" class="setting-btn active" data-theme="auto">🎨 Colorful (Default)</button>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <h3>Text Size</h3>
+                <div class="button-group">
+                    <button id="text-small" class="setting-btn" data-size="small">A Small</button>
+                    <button id="text-normal" class="setting-btn active" data-size="normal">A Normal</button>
+                    <button id="text-large" class="setting-btn" data-size="large">A Large</button>
+                    <button id="text-xlarge" class="setting-btn" data-size="xlarge">A Extra Large</button>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <h3>Animations</h3>
+                <div class="button-group">
+                    <button id="animations-on" class="setting-btn active" data-animations="on">✓ Animations On</button>
+                    <button id="animations-off" class="setting-btn" data-animations="off">✕ Animations Off</button>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <h3>High Contrast</h3>
+                <div class="button-group">
+                    <button id="contrast-normal" class="setting-btn active" data-contrast="normal">Normal</button>
+                    <button id="contrast-high" class="setting-btn" data-contrast="high">High Contrast</button>
+                </div>
+            </div>
+
+            <button id="reset-settings" class="reset-btn">Reset to Defaults</button>
+        </div>
+    </div>
+
+    <!-- JavaScript - Standalone client-side app -->
+    <script type="module" src="client/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Shield background -->
+  <path d="M 50 10 L 85 25 L 85 50 Q 85 75 50 90 Q 15 75 15 50 L 15 25 Z" 
+        fill="#0056b3" stroke="#003875" stroke-width="2"/>
+  
+  <!-- Inner shield highlight -->
+  <path d="M 50 15 L 80 28 L 80 50 Q 80 72 50 85 Q 20 72 20 50 L 20 28 Z" 
+        fill="#4a9eff" opacity="0.3"/>
+  
+  <!-- Letter B -->
+  <text x="50" y="70" font-family="Arial, sans-serif" font-size="50" 
+        font-weight="bold" fill="white" text-anchor="middle">B</text>
+  
+  <!-- Small lock icon -->
+  <rect x="42" y="35" width="16" height="12" rx="2" fill="white"/>
+  <path d="M 45 35 L 45 30 Q 45 25 50 25 Q 55 25 55 30 L 55 35" 
+        stroke="white" stroke-width="2" fill="none"/>
+  <circle cx="50" cy="40" r="2" fill="#0056b3"/>
+</svg>

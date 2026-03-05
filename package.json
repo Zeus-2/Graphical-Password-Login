@@ -1,0 +1,25 @@
+{
+  "name": "b-team-login-system",
+  "version": "1.0.0",
+  "description": "B-Team Login System - Secure authentication using image recognition",
+  "main": "server/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js"
+  },
+  "keywords": [
+    "authentication",
+    "graphical",
+    "security",
+    "two-factor"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "express-session": "^1.17.3",
+    "sqlite3": "^5.1.7"
+  }
+}
