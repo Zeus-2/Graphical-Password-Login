@@ -1,5 +1,7 @@
 # B-Team Login System
 
+Please note: All the logins found within theise fails are for testing only, none for them are used in the real world
+
 A web-based authentication system using image recognition combined with personalized security questions.
 
 ## Prerequisites
@@ -103,3 +105,4 @@ npm test
 ## License
 
 MIT
+
