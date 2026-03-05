@@ -1,0 +1,2 @@
+Username box is caps sensitive
+Sign up box is hidden for new users

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Fluffy body (multiple circles for wool texture) -->
+  <circle cx="100" cy="100" r="55" fill="#f0f0f0" stroke="#000" stroke-width="2"/>
+  <circle cx="70" cy="90" r="25" fill="#f0f0f0" stroke="#000" stroke-width="1.5"/>
+  <circle cx="130" cy="90" r="25" fill="#f0f0f0" stroke="#000" stroke-width="1.5"/>
+  <circle cx="85" cy="70" r="20" fill="#f0f0f0" stroke="#000" stroke-width="1.5"/>
+  <circle cx="115" cy="70" r="20" fill="#f0f0f0" stroke="#000" stroke-width="1.5"/>
+  <circle cx="100" cy="65" r="22" fill="#f0f0f0" stroke="#000" stroke-width="1.5"/>
+  
+  <!-- Face -->
+  <ellipse cx="100" cy="100" rx="30" ry="35" fill="#000" stroke="#000" stroke-width="2"/>
+  
+  <!-- Eyes -->
+  <circle cx="90" cy="95" r="6" fill="#fff"/>
+  <circle cx="110" cy="95" r="6" fill="#fff"/>
+  <circle cx="90" cy="95" r="3" fill="#000"/>
+  <circle cx="110" cy="95" r="3" fill="#000"/>
+  
+  <!-- Nose -->
+  <ellipse cx="100" cy="110" rx="8" ry="6" fill="#ffb6c1"/>
+  
+  <!-- Smile -->
+  <path d="M 90 118 Q 100 123 110 118" stroke="#000" stroke-width="2" fill="none"/>
+  
+  <!-- Ears -->
+  <ellipse cx="75" cy="85" rx="8" ry="15" fill="#000" stroke="#000" stroke-width="1"/>
+  <ellipse cx="125" cy="85" rx="8" ry="15" fill="#000" stroke="#000" stroke-width="1"/>
+</svg>

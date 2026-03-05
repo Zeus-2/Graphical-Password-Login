@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Head -->
+  <ellipse cx="100" cy="100" rx="60" ry="55" fill="#fff" stroke="#000" stroke-width="2"/>
+  
+  <!-- Spots -->
+  <ellipse cx="70" cy="80" rx="15" ry="20" fill="#000"/>
+  <ellipse cx="130" cy="90" rx="18" ry="15" fill="#000"/>
+  <ellipse cx="100" cy="70" rx="12" ry="10" fill="#000"/>
+  
+  <!-- Ears -->
+  <ellipse cx="50" cy="75" rx="15" ry="25" fill="#fff" stroke="#000" stroke-width="2"/>
+  <ellipse cx="150" cy="75" rx="15" ry="25" fill="#fff" stroke="#000" stroke-width="2"/>
+  <ellipse cx="50" cy="75" rx="8" ry="15" fill="#ffb6c1"/>
+  <ellipse cx="150" cy="75" rx="8" ry="15" fill="#ffb6c1"/>
+  
+  <!-- Horns -->
+  <path d="M 60 55 Q 55 45 50 50" stroke="#8b4513" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M 140 55 Q 145 45 150 50" stroke="#8b4513" stroke-width="4" fill="none" stroke-linecap="round"/>
+  
+  <!-- Eyes -->
+  <circle cx="80" cy="95" r="8" fill="#000"/>
+  <circle cx="120" cy="95" r="8" fill="#000"/>
+  <circle cx="82" cy="93" r="3" fill="#fff"/>
+  <circle cx="122" cy="93" r="3" fill="#fff"/>
+  
+  <!-- Snout -->
+  <ellipse cx="100" cy="125" rx="25" ry="20" fill="#ffb6c1" stroke="#000" stroke-width="2"/>
+  
+  <!-- Nostrils -->
+  <ellipse cx="92" cy="125" rx="5" ry="7" fill="#000"/>
+  <ellipse cx="108" cy="125" rx="5" ry="7" fill="#000"/>
+</svg>
