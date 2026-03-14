@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <meta name="description" content="B-Team Login System - Secure authentication using image recognition">
     <title>B-Team Login System</title>
     <link rel="icon" type="image/svg+xml" href="public/favicon.svg">
@@ -10,34 +10,70 @@
 </head>
 <body>
     <header role="banner">
-        <h1>B-Team Login System</h1>
-        <button id="accessibility-toggle" class="accessibility-toggle" aria-label="Open accessibility settings">
-            ⚙️ Settings
-        </button>
+        <div class="header-content">
+            <div class="header-top">
+                <button id="hamburger-menu" class="hamburger-menu" aria-label="Open menu" aria-expanded="false">
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                </button>
+                <h1 id="site-title">
+                    <a href="#" id="home-link">B-Team Login System</a>
+                </h1>
+                <button id="accessibility-toggle" class="accessibility-toggle" aria-label="Open accessibility settings">
+                    Settings
+                </button>
+            </div>
+        </div>
     </header>
+
+    <!-- Hamburger Menu Overlay -->
+    <div id="menu-overlay" class="menu-overlay hidden">
+        <div class="menu-content">
+            <button id="close-menu" class="close-menu-btn" aria-label="Close menu">×</button>
+            <nav class="hamburger-nav" role="navigation">
+                <ul>
+                    <li><a href="#" id="nav-login" class="nav-link">Student Login</a></li>
+                    <li><a href="#" id="nav-register" class="nav-link">Create Account</a></li>
+                    <li><a href="#" id="nav-teacher" class="nav-link">Teacher Portal</a></li>
+                </ul>
+            </nav>
+        </div>
+    </div>
 
     <main role="main">
         <!-- Login View -->
         <section id="login-view" class="view" aria-labelledby="login-heading">
-            <h2 id="login-heading">Login</h2>
+            <h2 id="login-heading">Welcome!</h2>
+            
+            <!-- New User Sign Up Section -->
+            <div class="signup-callout">
+                <p class="signup-text">First time here?</p>
+                <p class="signup-subtext">Let's make your special login!</p>
+                <button id="show-register-btn" type="button" class="signup-btn">Create My Login</button>
+            </div>
+            
+            <div class="login-divider">
+                <span>Already have a login? Sign in below!</span>
+            </div>
             
             <div class="user-input-container">
-                <label for="login-user-id">What's your name?</label>
+                <label for="login-user-id">Type your name:</label>
                 <input 
                     type="text" 
                     id="login-user-id" 
                     name="userId" 
                     aria-required="true"
                     aria-describedby="login-user-help"
-                    placeholder="Type your name here"
+                    placeholder="Your name here..."
                 >
-                <p id="login-user-help" class="help-text">Type your name to start</p>
+                <p id="login-user-help" class="help-text">This is your username!</p>
                 <button 
                     id="start-login-btn" 
                     type="button"
                     aria-label="Start login"
                 >
-                    Let's Go!
+                    Start!
                 </button>
             </div>
 
@@ -48,7 +84,8 @@
                 role="region"
                 aria-labelledby="image-grid-heading"
             >
-                <h3 id="image-grid-heading">Find Your Animal!</h3>
+                <h3 id="image-grid-heading">Find Your Special Animal!</h3>
+                <p class="step-instruction">This is your PASSWORD! Click on your animal:</p>
                 <div 
                     id="image-grid" 
                     class="image-grid"
@@ -66,7 +103,8 @@
                 role="region"
                 aria-labelledby="property-prompt-heading"
             >
-                <h3 id="property-prompt-heading">Answer the Question!</h3>
+                <h3 id="property-prompt-heading">One More Step!</h3>
+                <p class="step-instruction">This is part of your PASSWORD too!</p>
                 <p id="property-question" class="property-question" aria-live="polite">
                     <!-- Property question will be dynamically inserted here -->
                 </p>
@@ -91,26 +129,33 @@
             </div>
 
             <div class="view-switch">
-                <p>First time here? <a href="#" id="show-register-link">Sign up!</a></p>
                 <p><a href="#" id="show-teacher-link">Teacher Login</a></p>
             </div>
         </section>
 
         <!-- Registration View -->
         <section id="registration-view" class="view hidden" aria-labelledby="registration-heading">
-            <h2 id="registration-heading">Register</h2>
+            <h2 id="registration-heading">Create Your Login!</h2>
+            
+            <div class="instruction-box">
+                <p class="instruction-text">Let's learn about usernames and passwords!</p>
+                <p class="instruction-subtext">Follow the steps below to make your special login:</p>
+            </div>
             
             <div class="user-input-container">
-                <label for="register-user-id">What's your name?</label>
+                <label for="register-user-id">
+                    <span class="step-number">Step 1:</span> 
+                    Choose your USERNAME
+                </label>
                 <input 
                     type="text" 
                     id="register-user-id" 
                     name="userId" 
                     aria-required="true"
                     aria-describedby="register-user-help"
-                    placeholder="Type your name here"
+                    placeholder="Type your name..."
                 >
-                <p id="register-user-help" class="help-text">We'll use your name to remember you</p>
+                <p id="register-user-help" class="help-text">A username is your special name to log in!</p>
             </div>
 
             <!-- Available Images Container (populated dynamically) -->
@@ -120,7 +165,11 @@
                 role="region"
                 aria-labelledby="available-images-heading"
             >
-                <h3 id="available-images-heading">Pick Your Favorite Animal!</h3>
+                <h3 id="available-images-heading">
+                    <span class="step-number">Step 2:</span> 
+                    Pick Your PASSWORD Animal!
+                </h3>
+                <p class="step-instruction">This animal will be part of your secret password!</p>
                 <div 
                     id="available-images" 
                     class="image-grid"
@@ -138,7 +187,7 @@
                 role="region"
                 aria-labelledby="properties-preview-heading"
             >
-                <h3 id="properties-preview-heading">Image Properties</h3>
+                <h3 id="properties-preview-heading">Your Login Details</h3>
                 <dl id="properties-list" aria-label="Selected image properties">
                     <!-- Properties will be dynamically inserted here -->
                 </dl>
@@ -150,7 +199,7 @@
                 class="hidden"
                 aria-label="Complete registration"
             >
-                All Done!
+                All Done! Save My Login!
             </button>
 
             <!-- Registration Result (populated dynamically) -->
@@ -164,7 +213,7 @@
             </div>
 
             <div class="view-switch">
-                <p>Already signed up? <a href="#" id="show-login-link">Go to login!</a></p>
+                <p>Already have a login? <a href="#" id="show-login-link">Go back to login!</a></p>
             </div>
         </section>
 
@@ -223,12 +272,12 @@
         </section>
 
         <!-- Teacher Portal View -->
-        <section id="teacher-view" class="view hidden" aria-labelledby="teacher-heading">
+        <section id="teacher-view" class="view teacher-view hidden" aria-labelledby="teacher-heading">
             <h2 id="teacher-heading">Teacher Portal</h2>
             
             <div id="teacher-login-form">
                 <div class="user-input-container">
-                    <label for="teacher-username">Teacher Username</label>
+                    <label for="teacher-username">Username</label>
                     <input 
                         type="text" 
                         id="teacher-username" 
@@ -245,7 +294,7 @@
                     >
                 </div>
                 
-                <button id="teacher-login-btn" type="button">Login as Teacher</button>
+                <button id="teacher-login-btn" type="button">Login</button>
                 
                 <div id="teacher-login-result" class="auth-result hidden"></div>
                 
@@ -270,6 +319,12 @@
     <footer role="contentinfo">
         <p>&copy; 2026 B-Team Login System</p>
     </footer>
+
+    <!-- Easter Egg: Clickable Stars -->
+    <div id="star-container" class="star-container"></div>
+    
+    <!-- Easter Egg: Secret Rainbow Button -->
+    <button id="rainbow-mode-btn" class="rainbow-secret-btn" aria-label="Secret rainbow mode">?</button>
 
     <!-- Loading Indicator -->
     <div id="loading-indicator" class="loading-indicator hidden" role="status" aria-live="polite">

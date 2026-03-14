@@ -6,6 +6,44 @@
 console.log('main.js loaded successfully');
 
 // ============================================================================
+// CRYPTO UTILITIES
+// ============================================================================
+
+class CryptoUtils {
+  static async sha256(message) {
+    // Convert string to array buffer
+    const msgBuffer = new TextEncoder().encode(message);
+    // Hash the message
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    // Convert buffer to byte array
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    // Convert bytes to hex string
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+  }
+
+  static async hashPassword(password) {
+    return await this.sha256(password);
+  }
+
+  static async hashStudentCredentials(imageId, color, number) {
+    // Create a combined string from the student's credentials
+    const combined = `${imageId}:${color}:${number}`;
+    return await this.sha256(combined);
+  }
+
+  static async verifyPassword(inputPassword, storedHash) {
+    const inputHash = await this.sha256(inputPassword);
+    return inputHash === storedHash;
+  }
+
+  static async verifyStudentCredentials(imageId, color, number, storedHash) {
+    const inputHash = await this.hashStudentCredentials(imageId, color, number);
+    return inputHash === storedHash;
+  }
+}
+
+// ============================================================================
 // LOCAL STORAGE DATABASE
 // ============================================================================
 
@@ -16,25 +54,26 @@ class LocalDatabase {
     this.IMAGES_KEY = 'bteam_login_images';
     this.TEACHERS_KEY = 'bteam_login_teachers';
     this.initializeImages();
-    this.initializeDefaultTeacher();
+    this.initializeDefaultTeacher(); // Now async but we don't await
     console.log('LocalDatabase initialized');
   }
 
-  initializeDefaultTeacher() {
+  async initializeDefaultTeacher() {
     console.log('Initializing default teacher...');
     const teachers = this.getTeachers();
     console.log('Existing teachers:', Object.keys(teachers));
     
     if (Object.keys(teachers).length === 0) {
-      // Create default teacher account
+      // Create default teacher account with hashed password
+      const hashedPassword = await CryptoUtils.hashPassword('teacher123');
       teachers['teacher'] = {
         username: 'teacher',
-        password: 'teacher123', // In production, this should be hashed
+        passwordHash: hashedPassword,
         name: 'Default Teacher',
         createdAt: Date.now()
       };
       localStorage.setItem(this.TEACHERS_KEY, JSON.stringify(teachers));
-      console.log('Default teacher created');
+      console.log('Default teacher created with hashed password');
     } else {
       console.log('Teachers already exist');
     }
@@ -49,14 +88,15 @@ class LocalDatabase {
     return teachers[username] || null;
   }
 
-  createTeacher(username, password, name) {
+  async createTeacher(username, password, name) {
     const teachers = this.getTeachers();
     if (teachers[username]) {
       throw new Error('Teacher already exists');
     }
+    const passwordHash = await CryptoUtils.hashPassword(password);
     teachers[username] = {
       username,
-      password, // In production, hash this
+      passwordHash,
       name,
       createdAt: Date.now()
     };
@@ -101,19 +141,27 @@ class LocalDatabase {
 
   getUserById(userId) {
     const users = this.getUsers();
-    return users[userId] || null;
+    // Case-insensitive lookup
+    const normalizedUserId = userId.toLowerCase();
+    const userKey = Object.keys(users).find(key => key.toLowerCase() === normalizedUserId);
+    return userKey ? users[userKey] : null;
   }
 
-  createUser(userId, imageId, favoriteColor, luckyNumber, teacherUsername = null) {
+  async createUser(userId, imageId, favoriteColor, luckyNumber, teacherUsername = null) {
     const users = this.getUsers();
-    if (users[userId]) {
+    // Case-insensitive check for existing users
+    const normalizedUserId = userId.toLowerCase();
+    const existingKey = Object.keys(users).find(key => key.toLowerCase() === normalizedUserId);
+    if (existingKey) {
       throw new Error('User already exists');
     }
+    
+    // Hash the student's credentials
+    const credentialsHash = await CryptoUtils.hashStudentCredentials(imageId, favoriteColor, luckyNumber);
+    
     users[userId] = {
       userId,
-      registeredImageId: imageId,
-      favoriteColor,
-      luckyNumber,
+      credentialsHash, // Store hash instead of plain values
       teacherUsername,
       createdAt: Date.now()
     };
@@ -121,14 +169,16 @@ class LocalDatabase {
     return users[userId];
   }
 
-  updateUserCredentials(userId, imageId, favoriteColor, luckyNumber) {
+  async updateUserCredentials(userId, imageId, favoriteColor, luckyNumber) {
     const users = this.getUsers();
     if (!users[userId]) {
       throw new Error('User not found');
     }
-    users[userId].registeredImageId = imageId;
-    users[userId].favoriteColor = favoriteColor;
-    users[userId].luckyNumber = luckyNumber;
+    
+    // Hash the new credentials
+    const credentialsHash = await CryptoUtils.hashStudentCredentials(imageId, favoriteColor, luckyNumber);
+    
+    users[userId].credentialsHash = credentialsHash;
     users[userId].updatedAt = Date.now();
     localStorage.setItem(this.USERS_KEY, JSON.stringify(users));
     return users[userId];
@@ -163,6 +213,21 @@ class LocalDatabase {
     const attempts = JSON.parse(sessionStorage.getItem(ATTEMPTS_KEY) || '{}');
     const userAttempts = attempts[userId];
     return userAttempts && userAttempts.count >= 3;
+  }
+
+  // Database management functions
+  clearAllData() {
+    localStorage.removeItem(this.USERS_KEY);
+    localStorage.removeItem(this.TEACHERS_KEY);
+    sessionStorage.removeItem('bteam_login_attempts');
+    console.log('All user and teacher data cleared');
+  }
+
+  async resetToDefaults() {
+    this.clearAllData();
+    this.initializeImages();
+    await this.initializeDefaultTeacher();
+    console.log('Database reset to defaults with encrypted passwords');
   }
 }
 
@@ -235,19 +300,19 @@ class AuthFlow {
 
   async startAuthentication(userId) {
     if (!userId?.trim()) {
-      this.showError('Please enter your name! 😊');
+      this.showError('Please enter your name!');
       return;
     }
 
     const user = this.db.getUserById(userId.trim());
     if (!user) {
-      this.showError("Hmm, I don't know that name yet. Want to sign up first? 🤔");
+      this.showError("Hmm, I don't know that name yet. Want to sign up first?");
       return;
     }
 
     // Check if user is blocked
     if (this.isUserBlocked(userId.trim())) {
-      this.showError('🔒 Account locked! Too many failed attempts. Please ask your teacher to unlock your account.');
+      this.showError('Account locked! Too many failed attempts. Please ask your teacher to unlock your account.');
       return;
     }
 
@@ -257,7 +322,7 @@ class AuthFlow {
     
     if (delayTime > 0) {
       const seconds = Math.ceil(delayTime / 1000);
-      this.showError(`Too many failed attempts. Please wait ${seconds} seconds... ⏳`);
+      this.showError(`Too many failed attempts. Please wait ${seconds} seconds...`);
       
       // Disable the start button temporarily
       const startBtn = document.getElementById('start-login-btn');
@@ -276,17 +341,16 @@ class AuthFlow {
       }
     }
 
-    // Create image grid with user's image + more decoys based on attempt count
-    const userImage = this.db.getImageById(user.registeredImageId);
-    const decoyCount = Math.min(4 + attemptCount, 8); // Start with 5 total, up to 9 total
-    const decoys = this.db.getRandomImages(decoyCount, [user.registeredImageId]);
-    const imageGrid = [userImage, ...decoys].sort(() => Math.random() - 0.5);
+    // Show all animals for selection
+    const allImages = this.db.getAllImages();
+    const imageGrid = allImages.sort(() => Math.random() - 0.5);
 
     this.currentSession = {
       userId: userId.trim(),
-      correctImageId: user.registeredImageId,
-      correctColor: user.favoriteColor,
-      correctNumber: user.luckyNumber
+      storedHash: user.credentialsHash,
+      selectedImageId: null,
+      selectedColor: null,
+      selectedNumber: null
     };
 
     this.elements.userInputContainer.classList.add('hidden');
@@ -326,8 +390,120 @@ class AuthFlow {
   handleImageSelection(imageId) {
     if (!this.currentSession) return;
 
-    if (imageId !== this.currentSession.correctImageId) {
-      this.recordFailedAttempt(this.currentSession.userId);
+    // Store the selected image
+    this.currentSession.selectedImageId = imageId;
+    this.selectedImageId = imageId;
+    this.elements.imageGridContainer.classList.add('hidden');
+    this.renderColorPrompt();
+  }
+
+  renderColorPrompt() {
+    const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Black', 'White'];
+    
+    this.elements.propertyQuestion.textContent = "What's your favorite color?";
+    
+    const container = this.elements.propertyOptions;
+    container.innerHTML = '';
+    
+    colors.forEach(color => {
+      const button = document.createElement('button');
+      button.className = 'property-btn';
+      button.textContent = color;
+      button.addEventListener('click', () => this.handleColorSelection(color));
+      container.appendChild(button);
+    });
+    
+    this.elements.propertyPromptContainer.classList.remove('hidden');
+  }
+
+  handleColorSelection(color) {
+    this.currentSession.selectedColor = color;
+    this.elements.propertyPromptContainer.classList.add('hidden');
+    this.renderNumberPrompt();
+  }
+
+  renderNumberPrompt() {
+    this.elements.propertyQuestion.textContent = "What's your lucky number?";
+    
+    const container = this.elements.propertyOptions;
+    container.innerHTML = '';
+    
+    // Create number input
+    const inputContainer = document.createElement('div');
+    inputContainer.style.display = 'flex';
+    inputContainer.style.gap = '10px';
+    inputContainer.style.justifyContent = 'center';
+    inputContainer.style.alignItems = 'center';
+    
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '1';
+    input.max = '100';
+    input.placeholder = 'Enter 1-100';
+    input.style.padding = '12px';
+    input.style.fontSize = '18px';
+    input.style.width = '150px';
+    input.style.borderRadius = '8px';
+    input.style.border = '3px solid #FFE082';
+    
+    const button = document.createElement('button');
+    button.className = 'property-btn';
+    button.textContent = 'Login!';
+    button.style.width = 'auto';
+    button.addEventListener('click', () => {
+      const num = parseInt(input.value);
+      if (num >= 1 && num <= 100) {
+        this.handleNumberSelection(num.toString());
+      } else {
+        this.showError('Please enter a number between 1 and 100!');
+      }
+    });
+    
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        button.click();
+      }
+    });
+    
+    inputContainer.appendChild(input);
+    inputContainer.appendChild(button);
+    container.appendChild(inputContainer);
+    
+    this.elements.propertyPromptContainer.classList.remove('hidden');
+    input.focus();
+  }
+
+  async handleNumberSelection(number) {
+    this.currentSession.selectedNumber = number;
+    this.elements.propertyPromptContainer.classList.add('hidden');
+    
+    // Now verify all three selections against the stored hash
+    await this.verifyCredentials();
+  }
+
+  async verifyCredentials() {
+    if (!this.currentSession) return;
+
+    const { selectedImageId, selectedColor, selectedNumber, storedHash, userId } = this.currentSession;
+    
+    // Verify the complete credentials hash
+    const isValid = await CryptoUtils.verifyStudentCredentials(
+      selectedImageId,
+      selectedColor,
+      selectedNumber,
+      storedHash
+    );
+    
+    if (isValid) {
+      // Success! Clear failed attempts
+      this.clearFailedAttempts(userId);
+      sessionStorage.setItem('authToken', 'authenticated');
+      sessionStorage.setItem('userId', userId);
+      this.showAuthenticationResult(true, "Awesome! You got it right!");
+    } else {
+      // Failed attempt
+      this.recordFailedAttempt(userId);
+      const attemptCount = this.getFailedAttemptCount(userId);
       
       // Trigger background pulse on failure
       document.body.classList.add('login-failed-pulse');
@@ -335,83 +511,23 @@ class AuthFlow {
         document.body.classList.remove('login-failed-pulse');
       }, 1000);
       
-      this.showAuthenticationResult(false, "Oops! That's not your animal. Try again! 🐾");
-      return;
-    }
-
-    this.selectedImageId = imageId;
-    this.elements.imageGridContainer.classList.add('hidden');
-    this.renderPropertyPrompt();
-  }
-
-  renderPropertyPrompt() {
-    const challenges = [
-      { type: 'color', question: "What's your favorite color?", correct: this.currentSession.correctColor },
-      { type: 'number', question: "What's your lucky number?", correct: this.currentSession.correctNumber }
-    ];
-    
-    const challenge = challenges[Math.floor(Math.random() * challenges.length)];
-    
-    // Increase options based on failed attempts
-    const attemptCount = this.getFailedAttemptCount(this.currentSession.userId);
-    const optionCount = Math.min(3 + Math.floor(attemptCount / 2), 6); // 3-6 options
-    
-    let options;
-    if (challenge.type === 'color') {
-      const allColors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Black', 'White'];
-      const wrongAnswers = allColors.filter(c => c !== challenge.correct).sort(() => Math.random() - 0.5).slice(0, optionCount - 1);
-      options = [challenge.correct, ...wrongAnswers].sort(() => Math.random() - 0.5);
-    } else {
-      const wrongNumbers = [];
-      while (wrongNumbers.length < optionCount - 1) {
-        const num = Math.floor(Math.random() * 100) + 1;
-        if (num !== parseInt(challenge.correct) && !wrongNumbers.includes(num)) {
-          wrongNumbers.push(num.toString());
-        }
-      }
-      options = [challenge.correct, ...wrongNumbers].sort(() => Math.random() - 0.5);
-    }
-
-    this.currentSession.correctAnswer = challenge.correct;
-    this.elements.propertyQuestion.textContent = challenge.question;
-    
-    const container = this.elements.propertyOptions;
-    container.innerHTML = '';
-    
-    options.forEach(option => {
-      const button = document.createElement('button');
-      button.className = 'property-btn';
-      button.textContent = option;
-      button.addEventListener('click', () => this.handlePropertySelection(option));
-      container.appendChild(button);
-    });
-    
-    this.elements.propertyPromptContainer.classList.remove('hidden');
-  }
-
-  handlePropertySelection(answer) {
-    if (!this.currentSession) return;
-
-    this.elements.propertyPromptContainer.classList.add('hidden');
-    
-    if (answer === this.currentSession.correctAnswer) {
-      // Success! Clear failed attempts
-      this.clearFailedAttempts(this.currentSession.userId);
-      sessionStorage.setItem('authToken', 'authenticated');
-      sessionStorage.setItem('userId', this.currentSession.userId);
-      this.showAuthenticationResult(true, "Awesome! You got it right! 🎉");
-    } else {
-      // Failed attempt
-      this.recordFailedAttempt(this.currentSession.userId);
-      const attemptCount = this.getFailedAttemptCount(this.currentSession.userId);
-      
-      let message = "Not quite! Let's try again! 💪";
+      let message = "Oops! That's not the right combination. Try again!";
       if (attemptCount >= 3) {
-        message = `Wrong answer! You've tried ${attemptCount} times. Be careful! 🔒`;
+        message = `Wrong! You've tried ${attemptCount} times. Be careful!`;
       }
       
       this.showAuthenticationResult(false, message);
     }
+  }
+
+  renderPropertyPrompt() {
+    // This method is no longer used - keeping for compatibility
+    // Login now uses renderColorPrompt -> renderNumberPrompt -> verifyCredentials
+  }
+
+  async handlePropertySelection(answer) {
+    // This method is no longer used - keeping for compatibility
+    // Login now collects all three pieces then verifies at once
   }
 
   showAuthenticationResult(success, message) {
@@ -530,7 +646,7 @@ class RegistrationFlow {
     
     this.elements.imagePropertiesPreview.classList.remove('hidden');
     const list = this.elements.propertiesList;
-    list.innerHTML = '<dt>🎨 <strong>Pick your favorite color:</strong></dt>';
+    list.innerHTML = '<dt><span class="step-number">Step 3:</span> <strong>Pick your favorite color for your PASSWORD:</strong></dt>';
     
     const colorContainer = document.createElement('dd');
     colorContainer.style.display = 'flex';
@@ -558,7 +674,7 @@ class RegistrationFlow {
 
   showNumberPicker() {
     const list = this.elements.propertiesList;
-    list.innerHTML = '<dt>🔢 <strong>Pick your lucky number (1-100):</strong></dt>';
+    list.innerHTML = '<dt><span class="step-number">Step 4:</span> <strong>Pick your lucky number for your PASSWORD (1-100):</strong></dt>';
     
     const numberContainer = document.createElement('dd');
     numberContainer.style.marginTop = '10px';
@@ -567,7 +683,7 @@ class RegistrationFlow {
     input.type = 'number';
     input.min = '1';
     input.max = '100';
-    input.placeholder = 'Enter a number';
+    input.placeholder = 'Type a number...';
     input.style.padding = '10px';
     input.style.fontSize = '16px';
     input.style.width = '200px';
@@ -575,13 +691,13 @@ class RegistrationFlow {
     
     const button = document.createElement('button');
     button.className = 'property-btn';
-    button.textContent = 'Continue';
+    button.textContent = 'Next!';
     button.addEventListener('click', () => {
       const num = parseInt(input.value);
       if (num >= 1 && num <= 100) {
         this.handleNumberSelection(num.toString());
       } else {
-        this.showError('Please enter a number between 1 and 100! 🔢');
+        this.showError('Please pick a number between 1 and 100!');
       }
     });
     
@@ -609,7 +725,7 @@ class RegistrationFlow {
     const teacherList = Object.values(teachers);
     
     const list = this.elements.propertiesList;
-    list.innerHTML = '<dt>👨‍🏫 <strong>Select your teacher:</strong></dt>';
+    list.innerHTML = '<dt><span class="step-number">Step 5:</span> <strong>Who is your teacher?</strong></dt>';
     
     const teacherContainer = document.createElement('dd');
     teacherContainer.style.display = 'flex';
@@ -628,7 +744,7 @@ class RegistrationFlow {
     // Add "No Teacher" option
     const noTeacherBtn = document.createElement('button');
     noTeacherBtn.className = 'property-btn';
-    noTeacherBtn.textContent = 'No Teacher (Skip)';
+    noTeacherBtn.textContent = 'Skip This Step';
     noTeacherBtn.style.opacity = '0.7';
     noTeacherBtn.addEventListener('click', () => this.handleTeacherSelection(null));
     teacherContainer.appendChild(noTeacherBtn);
@@ -649,38 +765,40 @@ class RegistrationFlow {
     this.elements.imagePropertiesPreview.classList.remove('hidden');
     const list = this.elements.propertiesList;
     list.innerHTML = `
-      <dt>🐾 <strong>Your Animal</strong></dt><dd>${selectedImage.displayName}</dd>
-      <dt>🎨 <strong>Your Color</strong></dt><dd>${this.selectedColor}</dd>
-      <dt>🔢 <strong>Your Number</strong></dt><dd>${this.selectedNumber}</dd>
-      <dt>👨‍🏫 <strong>Your Teacher</strong></dt><dd>${teacherName}</dd>
+      <dt><strong>Your USERNAME</strong></dt><dd class="summary-value">${this.elements.userIdInput.value}</dd>
+      <dt><strong>Your PASSWORD is made of:</strong></dt>
+      <dd class="summary-value">Animal: ${selectedImage.displayName}</dd>
+      <dd class="summary-value">Color: ${this.selectedColor}</dd>
+      <dd class="summary-value">Number: ${this.selectedNumber}</dd>
+      <dt><strong>Your Teacher</strong></dt><dd class="summary-value">${teacherName}</dd>
     `;
     
     this.elements.submitRegistrationBtn.classList.remove('hidden');
   }
 
-  submitRegistration() {
+  async submitRegistration() {
     const userId = this.elements.userIdInput.value.trim();
     
     if (!userId) {
-      this.showError('Please enter your name! 😊');
+      this.showError('Please enter your name!');
       this.elements.userIdInput.focus();
       return;
     }
     
     if (!this.selectedImageId || !this.selectedColor || !this.selectedNumber) {
-      this.showError('Please complete all steps! 🐾');
+      this.showError('Please complete all steps!');
       return;
     }
 
     try {
-      this.db.createUser(userId, this.selectedImageId, this.selectedColor, this.selectedNumber, this.selectedTeacher);
-      this.showRegistrationResult(true, `Welcome, ${userId}! Your profile is ready! 🎉`);
+      await this.db.createUser(userId, this.selectedImageId, this.selectedColor, this.selectedNumber, this.selectedTeacher);
+      this.showRegistrationResult(true, `Welcome, ${userId}! Your profile is ready!`);
     } catch (error) {
       if (error.message === 'User already exists') {
-        this.showError("That name is already taken! Please choose a different name. 🤔");
+        this.showError("That name is already taken! Please choose a different name.");
         this.elements.userIdInput.focus();
       } else {
-        this.showError("Oops! Something went wrong. Let's try again! 🔄");
+        this.showError("Oops! Something went wrong. Let's try again!");
       }
     }
   }
@@ -929,7 +1047,6 @@ class App {
       teacherView: document.getElementById('teacher-view'),
       loginUserIdInput: document.getElementById('login-user-id'),
       startLoginBtn: document.getElementById('start-login-btn'),
-      showRegisterLink: document.getElementById('show-register-link'),
       showTeacherLink: document.getElementById('show-teacher-link'),
       backToStudentLogin: document.getElementById('back-to-student-login'),
       imageGridContainer: document.getElementById('image-grid-container'),
@@ -990,10 +1107,23 @@ class App {
       }
     });
     
-    this.elements.showRegisterLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      this.showRegistration();
-    });
+    // Handle both the new button and old link (if it exists)
+    const showRegisterBtn = document.getElementById('show-register-btn');
+    const showRegisterLink = document.getElementById('show-register-link');
+    
+    if (showRegisterBtn) {
+      showRegisterBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.showRegistration();
+      });
+    }
+    
+    if (showRegisterLink) {
+      showRegisterLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.showRegistration();
+      });
+    }
     
     this.elements.showLoginLink.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1017,6 +1147,84 @@ class App {
       e.preventDefault();
       this.showLogin();
     });
+    
+    // Navigation menu links
+    document.getElementById('home-link')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.showLogin();
+    });
+    
+    document.getElementById('nav-login')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.closeMenu();
+      this.showLogin();
+    });
+    
+    document.getElementById('nav-register')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.closeMenu();
+      this.showRegistration();
+    });
+    
+    document.getElementById('nav-teacher')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.closeMenu();
+      this.showTeacherPortal();
+    });
+    
+    // Hamburger menu
+    document.getElementById('hamburger-menu')?.addEventListener('click', () => {
+      this.openMenu();
+    });
+    
+    document.getElementById('close-menu')?.addEventListener('click', () => {
+      this.closeMenu();
+    });
+    
+    // Close menu when clicking overlay
+    document.getElementById('menu-overlay')?.addEventListener('click', (e) => {
+      if (e.target.id === 'menu-overlay') {
+        this.closeMenu();
+      }
+    });
+    
+    // Close menu on escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.closeMenu();
+      }
+    });
+    
+    // Secret: Press Ctrl+Shift+R to reset database
+    document.addEventListener('keydown', async (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+        e.preventDefault();
+        if (confirm('Reset all data and start fresh with encrypted passwords?\n\nThis will:\n- Delete all student accounts\n- Reset teacher password to: teacher123\n- Clear all login attempts\n\nThis cannot be undone!')) {
+          await this.db.resetToDefaults();
+          alert('Database reset complete! All passwords are now encrypted.\n\nTeacher login:\nUsername: teacher\nPassword: teacher123');
+          this.logout();
+          this.showLogin();
+        }
+      }
+    });
+  }
+
+  openMenu() {
+    const overlay = document.getElementById('menu-overlay');
+    const hamburger = document.getElementById('hamburger-menu');
+    if (overlay) {
+      overlay.classList.remove('hidden');
+      hamburger?.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  closeMenu() {
+    const overlay = document.getElementById('menu-overlay');
+    const hamburger = document.getElementById('hamburger-menu');
+    if (overlay) {
+      overlay.classList.add('hidden');
+      hamburger?.setAttribute('aria-expanded', 'false');
+    }
   }
 
   checkExistingSession() {
@@ -1035,6 +1243,7 @@ class App {
     this.authFlow.reset();
     this.elements.loginView.classList.remove('hidden');
     this.elements.loginUserIdInput.focus();
+    this.updateNavigation('login');
   }
 
   showRegistration() {
@@ -1043,6 +1252,7 @@ class App {
     this.elements.registrationView.classList.remove('hidden');
     this.registrationFlow.loadAvailableImages();
     this.elements.registerUserIdInput.focus();
+    this.updateNavigation('register');
   }
 
   showDashboard() {
@@ -1055,6 +1265,7 @@ class App {
     if (this.memoryGame) {
       this.memoryGame.startNewGame();
     }
+    this.updateNavigation('dashboard');
   }
 
   hideAllViews() {
@@ -1067,6 +1278,22 @@ class App {
   showTeacherPortal() {
     this.hideAllViews();
     this.elements.teacherView.classList.remove('hidden');
+    this.updateNavigation('teacher');
+  }
+
+  updateNavigation(currentView) {
+    // Update active state on navigation links
+    document.querySelectorAll('.nav-link').forEach(link => {
+      link.classList.remove('active');
+    });
+    
+    if (currentView === 'login' || currentView === 'dashboard') {
+      document.getElementById('nav-login')?.classList.add('active');
+    } else if (currentView === 'register') {
+      document.getElementById('nav-register')?.classList.add('active');
+    } else if (currentView === 'teacher') {
+      document.getElementById('nav-teacher')?.classList.add('active');
+    }
   }
 
   logout() {
@@ -1305,7 +1532,7 @@ class TeacherPortal {
     console.log('Teacher event listeners setup complete');
   }
 
-  login(username, password) {
+  async login(username, password) {
     console.log('=== LOGIN ATTEMPT ===');
     console.log('Username:', username);
     console.log('Password length:', password?.length);
@@ -1331,7 +1558,7 @@ class TeacherPortal {
     
     // Get teacher from database
     const teacher = this.db.getTeacherByUsername(username);
-    console.log('Teacher lookup result:', teacher);
+    console.log('Teacher lookup result:', teacher ? 'Found' : 'Not found');
     
     if (!teacher) {
       console.log('Teacher not found');
@@ -1339,13 +1566,12 @@ class TeacherPortal {
       return;
     }
     
-    // Check password
-    console.log('Checking password...');
-    console.log('Expected:', teacher.password);
-    console.log('Provided:', password);
-    console.log('Match:', teacher.password === password);
+    // Verify password using SHA-256
+    console.log('Verifying password...');
+    const isValid = await CryptoUtils.verifyPassword(password, teacher.passwordHash);
+    console.log('Password valid:', isValid);
     
-    if (teacher.password !== password) {
+    if (!isValid) {
       console.log('Password incorrect');
       this.showLoginError('Incorrect password');
       return;
@@ -1414,7 +1640,6 @@ class TeacherPortal {
       const studentCard = document.createElement('div');
       studentCard.className = 'student-card';
       
-      const image = this.db.getImageById(student.registeredImageId);
       const isLocked = this.db.isUserLocked(student.userId);
       
       const lockStatus = isLocked ? '<p class="lock-status">🔒 LOCKED - Too many failed attempts</p>' : '';
@@ -1424,9 +1649,6 @@ class TeacherPortal {
         <div class="student-info">
           <h4>${student.userId}</h4>
           ${lockStatus}
-          <p>🐾 Animal: ${image?.displayName || 'Unknown'}</p>
-          <p>🎨 Color: ${student.favoriteColor}</p>
-          <p>🔢 Number: ${student.luckyNumber}</p>
           <p class="help-text">Created: ${new Date(student.createdAt).toLocaleDateString()}</p>
         </div>
         <div class="student-actions">
@@ -1474,7 +1696,7 @@ class TeacherPortal {
     modal.innerHTML = `
       <div class="modal-content">
         <h3>Reset Password for ${userId}</h3>
-        <p class="help-text">Student will need to pick new credentials</p>
+        <p class="help-text">Select new credentials for the student</p>
         
         <div id="reset-animal-grid" class="image-grid"></div>
         
@@ -1487,6 +1709,16 @@ class TeacherPortal {
           <h4>Pick new lucky number:</h4>
           <input type="number" id="reset-number-input" min="1" max="100" placeholder="1-100">
           <button id="reset-number-confirm" class="property-btn">Continue</button>
+        </div>
+        
+        <div id="reset-password-display" class="hidden password-display">
+          <h4>✅ Password Reset Successful!</h4>
+          <p class="help-text">Share these credentials with the student. They will disappear in <span id="countdown">10</span> seconds.</p>
+          <div class="password-info">
+            <p><strong>🐾 Animal:</strong> <span id="display-animal"></span></p>
+            <p><strong>🎨 Color:</strong> <span id="display-color"></span></p>
+            <p><strong>🔢 Number:</strong> <span id="display-number"></span></p>
+          </div>
         </div>
         
         <div class="modal-actions">
@@ -1506,7 +1738,8 @@ class TeacherPortal {
     images.forEach(image => {
       const div = document.createElement('div');
       div.className = 'image-option';
-      div.innerHTML = `<img src="public/images/${image.fileName}" alt="${image.displayName}">`;
+      div.innerHTML = `<img src="public/images/${image.fileName}" alt="${image.displayName}">
+                       <p class="image-label">${image.displayName}</p>`;
       div.addEventListener('click', () => {
         grid.querySelectorAll('.image-option').forEach(el => el.classList.remove('selected'));
         div.classList.add('selected');
@@ -1546,9 +1779,33 @@ class TeacherPortal {
     modal.querySelector('#confirm-reset')?.addEventListener('click', () => {
       try {
         this.db.updateUserCredentials(userId, newImageId, newColor, newNumber);
-        alert(`Password reset successful for ${userId}!`);
-        modal.remove();
-        this.loadStudents();
+        
+        // Hide the form buttons
+        modal.querySelector('.modal-actions').classList.add('hidden');
+        
+        // Get the animal name for display
+        const selectedImage = images.find(img => img.imageId === newImageId);
+        
+        // Show the password display
+        const displayDiv = modal.querySelector('#reset-password-display');
+        modal.querySelector('#display-animal').textContent = selectedImage.displayName;
+        modal.querySelector('#display-color').textContent = newColor;
+        modal.querySelector('#display-number').textContent = newNumber;
+        displayDiv.classList.remove('hidden');
+        
+        // Start countdown
+        let timeLeft = 10;
+        const countdownSpan = modal.querySelector('#countdown');
+        const countdownInterval = setInterval(() => {
+          timeLeft--;
+          countdownSpan.textContent = timeLeft;
+          if (timeLeft <= 0) {
+            clearInterval(countdownInterval);
+            modal.remove();
+            this.loadStudents();
+          }
+        }, 1000);
+        
       } catch (error) {
         alert('Error resetting password: ' + error.message);
       }
@@ -1611,3 +1868,142 @@ if (document.readyState === 'loading') {
 }
 
 export default App;
+
+
+// ============================================================================
+// EASTER EGGS - Fun Interactive Elements
+// ============================================================================
+
+class EasterEggs {
+  constructor() {
+    this.rainbowMode = false;
+    this.setupStars();
+    this.setupRainbowMode();
+    this.setupClickEffects();
+  }
+
+  setupStars() {
+    const container = document.getElementById('star-container');
+    if (!container) return;
+
+    // Create clickable stars that appear randomly
+    setInterval(() => {
+      if (Math.random() > 0.8) { // 20% chance
+        const star = document.createElement('div');
+        star.className = 'clickable-star';
+        star.textContent = '★';
+        star.style.left = Math.random() * 90 + '%';
+        star.style.top = Math.random() * 80 + '%';
+        
+        star.addEventListener('click', (e) => {
+          // Create sparkle effect
+          for (let i = 0; i < 5; i++) {
+            const sparkle = document.createElement('div');
+            sparkle.className = 'sparkle';
+            sparkle.style.left = e.clientX + 'px';
+            sparkle.style.top = e.clientY + 'px';
+            sparkle.style.setProperty('--angle', (i * 72) + 'deg');
+            document.body.appendChild(sparkle);
+            setTimeout(() => sparkle.remove(), 1000);
+          }
+          e.target.remove();
+        });
+        
+        container.appendChild(star);
+        
+        // Remove after 5 seconds if not clicked
+        setTimeout(() => {
+          if (star.parentNode) star.remove();
+        }, 5000);
+      }
+    }, 2000);
+  }
+
+  setupRainbowMode() {
+    const btn = document.getElementById('rainbow-mode-btn');
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+      this.rainbowMode = !this.rainbowMode;
+      document.body.classList.toggle('rainbow-mode', this.rainbowMode);
+      
+      if (this.rainbowMode) {
+        btn.textContent = '🌈';
+        this.showMessage('Rainbow Mode Activated!');
+      } else {
+        btn.textContent = '?';
+        this.showMessage('Rainbow Mode Off');
+      }
+    });
+  }
+
+  setupClickEffects() {
+    // Add ripple effect to any click
+    document.addEventListener('click', (e) => {
+      if (Math.random() > 0.5) { // 50% chance
+        const ripple = document.createElement('div');
+        ripple.className = 'click-ripple';
+        ripple.style.left = e.clientX + 'px';
+        ripple.style.top = e.clientY + 'px';
+        document.body.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 600);
+      }
+    });
+
+    // Secret: Triple-click header for confetti
+    const header = document.querySelector('header h1');
+    let clickCount = 0;
+    let clickTimer;
+    
+    if (header) {
+      header.addEventListener('click', () => {
+        clickCount++;
+        clearTimeout(clickTimer);
+        
+        if (clickCount === 3) {
+          this.triggerConfetti();
+          clickCount = 0;
+        }
+        
+        clickTimer = setTimeout(() => {
+          clickCount = 0;
+        }, 1000);
+      });
+    }
+  }
+
+  triggerConfetti() {
+    for (let i = 0; i < 50; i++) {
+      setTimeout(() => {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.style.left = Math.random() * 100 + '%';
+        confetti.style.backgroundColor = this.getRandomColor();
+        confetti.style.animationDelay = Math.random() * 0.5 + 's';
+        document.body.appendChild(confetti);
+        setTimeout(() => confetti.remove(), 3000);
+      }, i * 30);
+    }
+    this.showMessage('Confetti!');
+  }
+
+  getRandomColor() {
+    const colors = ['#FF6B9D', '#4CAF50', '#2196F3', '#FFC107', '#9C27B0', '#FF5722'];
+    return colors[Math.floor(Math.random() * colors.length)];
+  }
+
+  showMessage(text) {
+    const msg = document.createElement('div');
+    msg.className = 'easter-egg-message';
+    msg.textContent = text;
+    document.body.appendChild(msg);
+    setTimeout(() => msg.remove(), 2000);
+  }
+}
+
+// Initialize easter eggs when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => new EasterEggs());
+} else {
+  new EasterEggs();
+}
