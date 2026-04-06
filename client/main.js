@@ -120,10 +120,6 @@ class SessionManager {
       AuditLog.log(reason, { userId: session.userId, role: session.role });
     }
     sessionStorage.removeItem(this.SESSION_KEY);
-    // Legacy keys
-    sessionStorage.removeItem('authToken');
-    sessionStorage.removeItem('userId');
-    sessionStorage.removeItem('teacherToken');
     clearTimeout(this._timer);
     this._timer = null;
   }
@@ -343,24 +339,24 @@ class LocalDatabase {
 
   getFailedAttemptCount(userId) {
     const ATTEMPTS_KEY = 'bteam_login_attempts';
-    const attempts = JSON.parse(sessionStorage.getItem(ATTEMPTS_KEY) || '{}');
+    const attempts = JSON.parse(localStorage.getItem(ATTEMPTS_KEY) || '{}');
     return attempts[userId]?.count || 0;
   }
 
   unlockUser(userId, performedBy = null) {
-    // Clear failed attempts from sessionStorage
+    // Clear failed attempts from localStorage
     const ATTEMPTS_KEY = 'bteam_login_attempts';
-    const attempts = JSON.parse(sessionStorage.getItem(ATTEMPTS_KEY) || '{}');
+    const attempts = JSON.parse(localStorage.getItem(ATTEMPTS_KEY) || '{}');
     if (attempts[userId]) {
       delete attempts[userId];
-      sessionStorage.setItem(ATTEMPTS_KEY, JSON.stringify(attempts));
+      localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(attempts));
     }
     AuditLog.log('ACCOUNT_UNLOCKED', { userId, performedBy });
   }
 
   isUserLocked(userId) {
     const ATTEMPTS_KEY = 'bteam_login_attempts';
-    const attempts = JSON.parse(sessionStorage.getItem(ATTEMPTS_KEY) || '{}');
+    const attempts = JSON.parse(localStorage.getItem(ATTEMPTS_KEY) || '{}');
     const userAttempts = attempts[userId];
     return userAttempts && userAttempts.count >= 3;
   }
@@ -369,7 +365,7 @@ class LocalDatabase {
   clearAllData() {
     localStorage.removeItem(this.USERS_KEY);
     localStorage.removeItem(this.TEACHERS_KEY);
-    sessionStorage.removeItem('bteam_login_attempts');
+    localStorage.removeItem('bteam_login_attempts');
     console.log('All user and teacher data cleared');
   }
 
@@ -396,12 +392,12 @@ class AuthFlow {
   }
 
   loadFailedAttempts() {
-    const stored = sessionStorage.getItem(this.ATTEMPTS_KEY);
+    const stored = localStorage.getItem(this.ATTEMPTS_KEY);
     return stored ? JSON.parse(stored) : {};
   }
 
   saveFailedAttempts() {
-    sessionStorage.setItem(this.ATTEMPTS_KEY, JSON.stringify(this.failedAttempts));
+    localStorage.setItem(this.ATTEMPTS_KEY, JSON.stringify(this.failedAttempts));
   }
 
   getFailedAttemptCount(userId) {
@@ -676,11 +672,7 @@ class AuthFlow {
     
     if (isValid) {
       this.clearFailedAttempts(userId);
-      // Use SessionManager instead of raw sessionStorage
       SessionManager.create(userId, 'student');
-      // Legacy compat
-      sessionStorage.setItem('authToken', 'authenticated');
-      sessionStorage.setItem('userId', userId);
       this.showAuthenticationResult(true, "Awesome! You got it right!");
     } else {
       this.recordFailedAttempt(userId);
@@ -1436,7 +1428,6 @@ class App {
     const session = SessionManager.get();
     if (session) {
       if (session.role === 'teacher') {
-        // Restore teacher session
         const teacher = this.db.getTeacherByUsername(session.userId);
         if (teacher) {
           this.teacherPortal.currentTeacher = teacher;
@@ -1450,25 +1441,14 @@ class App {
         this.showDashboard();
       }
     } else {
-      // Legacy fallback
-      const token = sessionStorage.getItem('authToken');
-      const userId = sessionStorage.getItem('userId');
-      if (token && userId) {
-        SessionManager.create(userId, 'student');
-        this.showDashboard();
-      } else {
-        this.showLogin();
-      }
+      this.showLogin();
     }
 
-    // Listen for inactivity timeout
     window.addEventListener('session-timeout', (e) => {
-      const role = e.detail?.role;
-      this._showTimeoutBanner(role);
+      this._showTimeoutBanner(e.detail?.role);
       this.logout(true);
     });
 
-    // Touch session on user activity
     ['click', 'keydown', 'touchstart'].forEach(evt => {
       document.addEventListener(evt, () => SessionManager.touch(), { passive: true });
     });
@@ -1502,7 +1482,7 @@ class App {
   showDashboard() {
     this.hideAllViews();
     const session = SessionManager.get();
-    const userId = session?.userId || sessionStorage.getItem('userId');
+    const userId = session?.userId;
     this.elements.welcomeMessage.textContent = userId ? `Welcome back, ${userId}! 👋` : 'Welcome! 👋';
 
     // Show last login info
@@ -1907,7 +1887,6 @@ class TeacherPortal {
     console.log('Login successful!');
     this.currentTeacher = teacher;
     SessionManager.create(username, 'teacher');
-    sessionStorage.setItem('teacherToken', username);
     this.showDashboard();
   }
 
