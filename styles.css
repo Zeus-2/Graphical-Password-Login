@@ -2497,3 +2497,260 @@ body:has(.teacher-view:not(.hidden)) .star-container,
 body:has(.teacher-view:not(.hidden)) .rainbow-secret-btn {
     display: none;
 }
+
+
+/* ===================================
+   Session Timeout Banner
+   =================================== */
+.timeout-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #FF5252 0%, #E53935 100%);
+    color: white;
+    text-align: center;
+    padding: 14px var(--spacing-md);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    z-index: 99999;
+    animation: slideDown 0.4s ease;
+}
+
+/* ===================================
+   Last Login Info
+   =================================== */
+.last-login-info {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-light);
+    margin-top: var(--spacing-xs);
+    font-style: italic;
+}
+
+/* ===================================
+   Privacy / Shoulder Surfing Mode
+   =================================== */
+
+/* Smaller animals with no labels visible by default */
+body.privacy-mode .image-option.privacy-mode img {
+    opacity: 0.75;
+    transform: scale(0.88);
+    transition: opacity 0.2s, transform 0.2s;
+    filter: blur(1px);
+}
+
+body.privacy-mode .image-option.privacy-mode:hover img,
+body.privacy-mode .image-option.privacy-mode:focus img {
+    opacity: 1;
+    transform: scale(1);
+    filter: none;
+}
+
+/* Hide labels until hover */
+.image-label.label-hidden {
+    opacity: 0;
+    transition: opacity 0.2s;
+    user-select: none;
+}
+
+.image-option:hover .image-label.label-hidden,
+.image-option:focus .image-label.label-hidden {
+    opacity: 1;
+}
+
+/* ===================================
+   Audit Log Styles
+   =================================== */
+.audit-log-section {
+    margin-top: var(--spacing-xl);
+    border-top: 2px solid #E0E0E0;
+    padding-top: var(--spacing-lg);
+}
+
+.audit-controls {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.audit-log-entries {
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid #E0E0E0;
+    border-radius: 8px;
+    background: #FAFAFA;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
+}
+
+.audit-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #F0F0F0;
+    flex-wrap: wrap;
+}
+
+.audit-entry:last-child {
+    border-bottom: none;
+}
+
+.audit-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.audit-action {
+    font-weight: 600;
+    color: #424242;
+    min-width: 140px;
+}
+
+.audit-user {
+    background: #E3F2FD;
+    color: #1565C0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.audit-time {
+    margin-left: auto;
+    color: #9E9E9E;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+/* Colour-code by action type */
+.audit-login-failed { background-color: #FFF3F3; }
+.audit-login { background-color: #F3FFF3; }
+.audit-logout, .audit-session-timeout { background-color: #FFFDE7; }
+.audit-user-deleted { background-color: #FFF3F3; }
+.audit-user-created { background-color: #F3FFF3; }
+.audit-password-reset { background-color: #E8F4FD; }
+.audit-account-unlocked { background-color: #F3FFF3; }
+
+
+/* ===================================
+   Dyslexia-Friendly Font
+   =================================== */
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;700&display=swap');
+
+body.font-dyslexia,
+body.font-dyslexia input,
+body.font-dyslexia button,
+body.font-dyslexia label,
+body.font-dyslexia p,
+body.font-dyslexia h1,
+body.font-dyslexia h2,
+body.font-dyslexia h3,
+body.font-dyslexia h4 {
+    font-family: 'Lexend', 'OpenDyslexic', Arial, sans-serif !important;
+    letter-spacing: 0.05em;
+    word-spacing: 0.1em;
+    line-height: 1.8;
+}
+
+/* ===================================
+   Field-level error messages
+   =================================== */
+.field-error {
+    color: var(--color-error);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    margin-top: 4px;
+    padding: 4px 8px;
+    background: #fff0f0;
+    border-left: 3px solid var(--color-error);
+    border-radius: 4px;
+}
+
+.field-error.hidden { display: none; }
+
+input[aria-invalid="true"] {
+    border-color: var(--color-error) !important;
+    box-shadow: 0 0 0 3px rgba(255, 82, 82, 0.2);
+}
+
+/* ===================================
+   Enhanced focus indicators
+   =================================== */
+:focus-visible {
+    outline: 3px solid var(--color-border-focus);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+.image-option:focus-visible {
+    outline: 4px solid var(--color-border-focus);
+    outline-offset: 4px;
+    box-shadow: 0 0 0 6px rgba(255, 193, 7, 0.3);
+}
+
+/* ===================================
+   Teacher Portal — Student Controls
+   =================================== */
+.student-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-sm);
+    background: #F5F5F5;
+    border-radius: 8px;
+}
+
+.student-search-input {
+    flex: 1;
+    min-width: 180px;
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 2px solid #BDBDBD;
+    border-radius: 6px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.student-search-input:focus {
+    border-color: #1976D2;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
+}
+
+.filter-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #616161;
+    cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    white-space: nowrap;
+}
+
+.student-count {
+    font-size: 12px;
+    color: #9E9E9E;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin-left: auto;
+}
+
+/* Locked student card highlight */
+.student-card--locked {
+    border-color: #EF9A9A !important;
+    background-color: #FFF8F8 !important;
+}
+
+/* Failed attempt badge */
+.failed-count {
+    font-size: 12px;
+    color: #E65100;
+    font-weight: 600;
+    background: #FFF3E0;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+    margin: 2px 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}

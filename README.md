@@ -15,9 +15,26 @@ No installation required! Just open `index.html` in your browser.
 
 The system uses browser localStorage for data persistence. All data is stored locally in your browser.
 
-## How to Use
+## Default Login Credentials
 
-## Project Structure
+### Teacher Account
+| Field | Value |
+|-------|-------|
+| Username | `teacher` |
+| Password | `teacher123` |
+
+Access the teacher portal via the "Teacher Login" link on the login page.
+
+### Demo Student Account
+Students create their own accounts during registration. To create one:
+1. Click "Create My Login"
+2. Enter a name (e.g. `demo`)
+3. Pick an animal, colour, and lucky number
+4. Log in using those same choices
+
+> To reset all data and restore the default teacher account, press `Ctrl+Shift+R` on the login page.
+
+
 
 ```
 .

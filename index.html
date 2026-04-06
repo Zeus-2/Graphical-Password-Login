@@ -64,14 +64,17 @@
                     id="login-user-id" 
                     name="userId" 
                     aria-required="true"
-                    aria-describedby="login-user-help"
+                    aria-describedby="login-user-help login-user-error"
+                    aria-invalid="false"
+                    autocomplete="username"
                     placeholder="Your name here..."
                 >
                 <p id="login-user-help" class="help-text">This is your username!</p>
+                <p id="login-user-error" class="field-error hidden" role="alert" aria-live="assertive"></p>
                 <button 
                     id="start-login-btn" 
                     type="button"
-                    aria-label="Start login"
+                    aria-label="Start login process"
                 >
                     Start!
                 </button>
@@ -90,7 +93,7 @@
                     id="image-grid" 
                     class="image-grid"
                     role="group"
-                    aria-label="Image selection grid"
+                    aria-label="Animal selection — use arrow keys to move, Enter or Space to select"
                 >
                     <!-- Images will be dynamically inserted here -->
                 </div>
@@ -152,10 +155,13 @@
                     id="register-user-id" 
                     name="userId" 
                     aria-required="true"
-                    aria-describedby="register-user-help"
+                    aria-describedby="register-user-help register-user-error"
+                    aria-invalid="false"
+                    autocomplete="username"
                     placeholder="Type your name..."
                 >
                 <p id="register-user-help" class="help-text">A username is your special name to log in!</p>
+                <p id="register-user-error" class="field-error hidden" role="alert" aria-live="assertive"></p>
             </div>
 
             <!-- Available Images Container (populated dynamically) -->
@@ -229,6 +235,7 @@
                 <div class="dashboard-info">
                     <h3>You're In! 🎉</h3>
                     <p>Great job logging in! Now let's play a game!</p>
+                    <p id="last-login-info" class="last-login-info hidden"></p>
                 </div>
 
                 <!-- Memory Game -->
@@ -371,6 +378,31 @@
                     <button id="contrast-normal" class="setting-btn active" data-contrast="normal">Normal</button>
                     <button id="contrast-high" class="setting-btn" data-contrast="high">High Contrast</button>
                 </div>
+            </div>
+
+            <div class="setting-group">
+                <h3>Font Style</h3>
+                <div class="button-group">
+                    <button id="font-default" class="setting-btn active" data-font="default">Abc Default Font</button>
+                    <button id="font-dyslexia" class="setting-btn" data-font="dyslexia">Abc Dyslexia-Friendly</button>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <h3>Audio Prompts</h3>
+                <div class="button-group">
+                    <button id="audio-off" class="setting-btn active" data-audio="off">🔇 Audio Off</button>
+                    <button id="audio-on" class="setting-btn" data-audio="on">🔊 Audio On</button>
+                </div>
+                <p class="help-text" style="margin-top:0.5rem;font-size:14px;">Reads instructions aloud for younger readers.</p>
+            </div>
+
+            <div class="setting-group">
+                <h3>Shoulder Surfing Protection</h3>
+                <div class="button-group">
+                    <button id="privacy-mode-btn" class="setting-btn" aria-pressed="false">👁️ Privacy Mode: Off</button>
+                </div>
+                <p class="help-text" style="margin-top:0.5rem;font-size:14px;">Hides animal labels until you hover over them.</p>
             </div>
 
             <button id="reset-settings" class="reset-btn">Reset to Defaults</button>
