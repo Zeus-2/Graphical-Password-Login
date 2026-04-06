@@ -44,8 +44,144 @@ class CryptoUtils {
 }
 
 // ============================================================================
-// LOCAL STORAGE DATABASE
+// AUDIT LOG
 // ============================================================================
+
+class AuditLog {
+  static AUDIT_KEY = 'bteam_audit_log';
+  static MAX_ENTRIES = 500;
+
+  static log(action, details = {}) {
+    const entries = this.getAll();
+    entries.push({
+      timestamp: Date.now(),
+      action,
+      ...details
+    });
+    // Keep only the most recent entries
+    if (entries.length > this.MAX_ENTRIES) entries.splice(0, entries.length - this.MAX_ENTRIES);
+    localStorage.setItem(this.AUDIT_KEY, JSON.stringify(entries));
+  }
+
+  static getAll() {
+    return JSON.parse(localStorage.getItem(this.AUDIT_KEY) || '[]');
+  }
+
+  static getRecent(n = 100) {
+    return this.getAll().slice(-n).reverse();
+  }
+
+  static clear() {
+    localStorage.removeItem(this.AUDIT_KEY);
+  }
+}
+
+// ============================================================================
+// SESSION MANAGER
+// ============================================================================
+
+class SessionManager {
+  static TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes inactivity
+  static SESSION_KEY = 'bteam_session';
+  static _timer = null;
+
+  static create(userId, role) {
+    const session = {
+      userId,
+      role, // 'student' | 'teacher'
+      loginTime: Date.now(),
+      lastActivity: Date.now()
+    };
+    sessionStorage.setItem(this.SESSION_KEY, JSON.stringify(session));
+    this._resetTimer();
+    AuditLog.log('LOGIN', { userId, role });
+    // Persist last login time per user
+    const lastLogins = JSON.parse(localStorage.getItem('bteam_last_logins') || '{}');
+    lastLogins[userId] = Date.now();
+    localStorage.setItem('bteam_last_logins', JSON.stringify(lastLogins));
+  }
+
+  static get() {
+    const raw = sessionStorage.getItem(this.SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }
+
+  static touch() {
+    const session = this.get();
+    if (!session) return;
+    session.lastActivity = Date.now();
+    sessionStorage.setItem(this.SESSION_KEY, JSON.stringify(session));
+    this._resetTimer();
+  }
+
+  static destroy(reason = 'LOGOUT') {
+    const session = this.get();
+    if (session) {
+      AuditLog.log(reason, { userId: session.userId, role: session.role });
+    }
+    sessionStorage.removeItem(this.SESSION_KEY);
+    // Legacy keys
+    sessionStorage.removeItem('authToken');
+    sessionStorage.removeItem('userId');
+    sessionStorage.removeItem('teacherToken');
+    clearTimeout(this._timer);
+    this._timer = null;
+  }
+
+  static _resetTimer() {
+    clearTimeout(this._timer);
+    this._timer = setTimeout(() => {
+      const session = this.get();
+      if (session) {
+        this.destroy('SESSION_TIMEOUT');
+        // Dispatch custom event so App can react
+        window.dispatchEvent(new CustomEvent('session-timeout', { detail: session }));
+      }
+    }, this.TIMEOUT_MS);
+  }
+
+  static getLastLogin(userId) {
+    const lastLogins = JSON.parse(localStorage.getItem('bteam_last_logins') || '{}');
+    return lastLogins[userId] || null;
+  }
+
+  static isActive() {
+    return !!this.get();
+  }
+}
+
+// ============================================================================
+// VALIDATION UTILITIES
+// ============================================================================
+
+class Validator {
+  static USERNAME_MIN = 2;
+  static USERNAME_MAX = 30;
+  static USERNAME_PATTERN = /^[a-zA-Z0-9 _'-]+$/;
+
+  static validateUsername(userId) {
+    if (!userId || !userId.trim()) return 'Please type your name first!';
+    const trimmed = userId.trim();
+    if (trimmed.length < this.USERNAME_MIN) return `Your name needs at least ${this.USERNAME_MIN} letters.`;
+    if (trimmed.length > this.USERNAME_MAX) return `Your name is too long — keep it under ${this.USERNAME_MAX} letters.`;
+    if (!this.USERNAME_PATTERN.test(trimmed)) return 'Only letters, numbers, spaces and - are allowed.';
+    return null; // valid
+  }
+
+  static validateTeacherUsername(username) {
+    if (!username || !username.trim()) return 'Please enter a username.';
+    if (username.trim().length < 3) return 'Username must be at least 3 characters.';
+    return null;
+  }
+
+  static validateTeacherPassword(password) {
+    if (!password || !password.trim()) return 'Please enter a password.';
+    if (password.length < 6) return 'Password must be at least 6 characters.';
+    return null;
+  }
+}
+
+
 
 class LocalDatabase {
   constructor() {
@@ -54,7 +190,8 @@ class LocalDatabase {
     this.IMAGES_KEY = 'bteam_login_images';
     this.TEACHERS_KEY = 'bteam_login_teachers';
     this.initializeImages();
-    this.initializeDefaultTeacher(); // Now async but we don't await
+    // Store the promise so callers can await it
+    this.ready = this.initializeDefaultTeacher();
     console.log('LocalDatabase initialized');
   }
 
@@ -161,36 +298,38 @@ class LocalDatabase {
     
     users[userId] = {
       userId,
-      credentialsHash, // Store hash instead of plain values
+      credentialsHash,
       teacherUsername,
       createdAt: Date.now()
     };
     localStorage.setItem(this.USERS_KEY, JSON.stringify(users));
+    AuditLog.log('USER_CREATED', { userId, teacherUsername });
     return users[userId];
   }
 
-  async updateUserCredentials(userId, imageId, favoriteColor, luckyNumber) {
+  async updateUserCredentials(userId, imageId, favoriteColor, luckyNumber, performedBy = null) {
     const users = this.getUsers();
     if (!users[userId]) {
       throw new Error('User not found');
     }
     
-    // Hash the new credentials
     const credentialsHash = await CryptoUtils.hashStudentCredentials(imageId, favoriteColor, luckyNumber);
     
     users[userId].credentialsHash = credentialsHash;
     users[userId].updatedAt = Date.now();
     localStorage.setItem(this.USERS_KEY, JSON.stringify(users));
+    AuditLog.log('PASSWORD_RESET', { userId, performedBy });
     return users[userId];
   }
 
-  deleteUser(userId) {
+  deleteUser(userId, performedBy = null) {
     const users = this.getUsers();
     if (!users[userId]) {
       throw new Error('User not found');
     }
     delete users[userId];
     localStorage.setItem(this.USERS_KEY, JSON.stringify(users));
+    AuditLog.log('USER_DELETED', { userId, performedBy });
   }
 
   getUsersByTeacher(teacherUsername) {
@@ -198,7 +337,17 @@ class LocalDatabase {
     return Object.values(users).filter(user => user.teacherUsername === teacherUsername);
   }
 
-  unlockUser(userId) {
+  getAllUsers() {
+    return Object.values(this.getUsers());
+  }
+
+  getFailedAttemptCount(userId) {
+    const ATTEMPTS_KEY = 'bteam_login_attempts';
+    const attempts = JSON.parse(sessionStorage.getItem(ATTEMPTS_KEY) || '{}');
+    return attempts[userId]?.count || 0;
+  }
+
+  unlockUser(userId, performedBy = null) {
     // Clear failed attempts from sessionStorage
     const ATTEMPTS_KEY = 'bteam_login_attempts';
     const attempts = JSON.parse(sessionStorage.getItem(ATTEMPTS_KEY) || '{}');
@@ -206,6 +355,7 @@ class LocalDatabase {
       delete attempts[userId];
       sessionStorage.setItem(ATTEMPTS_KEY, JSON.stringify(attempts));
     }
+    AuditLog.log('ACCOUNT_UNLOCKED', { userId, performedBy });
   }
 
   isUserLocked(userId) {
@@ -299,14 +449,15 @@ class AuthFlow {
   }
 
   async startAuthentication(userId) {
-    if (!userId?.trim()) {
-      this.showError('Please enter your name!');
+    const usernameError = Validator.validateUsername(userId);
+    if (usernameError) {
+      this.showError(usernameError);
       return;
     }
 
     const user = this.db.getUserById(userId.trim());
     if (!user) {
-      this.showError("Hmm, I don't know that name yet. Want to sign up first?");
+      this.showError("I don't know that name yet. Want to sign up first?");
       return;
     }
 
@@ -361,9 +512,11 @@ class AuthFlow {
     const grid = this.elements.imageGrid;
     grid.innerHTML = '';
     
+    const privacyMode = localStorage.getItem('bteam_privacy_mode') === 'true';
+    
     images.forEach(image => {
       const div = document.createElement('div');
-      div.className = 'image-option';
+      div.className = 'image-option' + (privacyMode ? ' privacy-mode' : '');
       div.setAttribute('role', 'button');
       div.setAttribute('tabindex', '0');
       div.setAttribute('data-image-id', image.imageId);
@@ -372,12 +525,20 @@ class AuthFlow {
       img.src = `public/images/${image.fileName}`;
       img.alt = image.displayName;
       div.appendChild(img);
+
+      // Label hidden until hover in privacy mode
+      const label = document.createElement('p');
+      label.className = 'image-label' + (privacyMode ? ' label-hidden' : '');
+      label.textContent = image.displayName;
+      div.appendChild(label);
       
       div.addEventListener('click', () => this.handleImageSelection(image.imageId));
       div.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           this.handleImageSelection(image.imageId);
+        } else {
+          this._handleGridArrowKey(e, grid);
         }
       });
       
@@ -385,6 +546,25 @@ class AuthFlow {
     });
     
     this.elements.imageGridContainer.classList.remove('hidden');
+    // Focus first item for keyboard users
+    grid.querySelector('[tabindex="0"]')?.focus();
+    AudioPrompts.speak('Find your special animal! Click on it.');
+  }
+
+  _handleGridArrowKey(e, grid) {
+    const items = Array.from(grid.querySelectorAll('[role="button"]'));
+    const idx = items.indexOf(document.activeElement);
+    if (idx === -1) return;
+    const cols = 3;
+    let next = -1;
+    if (e.key === 'ArrowRight') next = idx + 1;
+    else if (e.key === 'ArrowLeft') next = idx - 1;
+    else if (e.key === 'ArrowDown') next = idx + cols;
+    else if (e.key === 'ArrowUp') next = idx - cols;
+    if (next >= 0 && next < items.length) {
+      e.preventDefault();
+      items[next].focus();
+    }
   }
 
   handleImageSelection(imageId) {
@@ -414,6 +594,7 @@ class AuthFlow {
     });
     
     this.elements.propertyPromptContainer.classList.remove('hidden');
+    AudioPrompts.speak("What is your favourite colour?");
   }
 
   handleColorSelection(color) {
@@ -440,6 +621,7 @@ class AuthFlow {
     input.min = '1';
     input.max = '100';
     input.placeholder = 'Enter 1-100';
+    input.setAttribute('aria-label', 'Enter your lucky number between 1 and 100');
     input.style.padding = '12px';
     input.style.fontSize = '18px';
     input.style.width = '150px';
@@ -455,14 +637,12 @@ class AuthFlow {
       if (num >= 1 && num <= 100) {
         this.handleNumberSelection(num.toString());
       } else {
-        this.showError('Please enter a number between 1 and 100!');
+        this.showError('Pick a number between 1 and 100!');
       }
     });
     
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        button.click();
-      }
+      if (e.key === 'Enter') button.click();
     });
     
     inputContainer.appendChild(input);
@@ -470,6 +650,7 @@ class AuthFlow {
     container.appendChild(inputContainer);
     
     this.elements.propertyPromptContainer.classList.remove('hidden');
+    AudioPrompts.speak("What is your lucky number? Type it in.");
     input.focus();
   }
 
@@ -486,7 +667,6 @@ class AuthFlow {
 
     const { selectedImageId, selectedColor, selectedNumber, storedHash, userId } = this.currentSession;
     
-    // Verify the complete credentials hash
     const isValid = await CryptoUtils.verifyStudentCredentials(
       selectedImageId,
       selectedColor,
@@ -495,17 +675,18 @@ class AuthFlow {
     );
     
     if (isValid) {
-      // Success! Clear failed attempts
       this.clearFailedAttempts(userId);
+      // Use SessionManager instead of raw sessionStorage
+      SessionManager.create(userId, 'student');
+      // Legacy compat
       sessionStorage.setItem('authToken', 'authenticated');
       sessionStorage.setItem('userId', userId);
       this.showAuthenticationResult(true, "Awesome! You got it right!");
     } else {
-      // Failed attempt
       this.recordFailedAttempt(userId);
       const attemptCount = this.getFailedAttemptCount(userId);
+      AuditLog.log('LOGIN_FAILED', { userId, attemptCount });
       
-      // Trigger background pulse on failure
       document.body.classList.add('login-failed-pulse');
       setTimeout(() => {
         document.body.classList.remove('login-failed-pulse');
@@ -537,18 +718,17 @@ class AuthFlow {
     
     if (success) {
       result.classList.add('success');
-      result.innerHTML = `<div class="result-icon">✅</div><h3>Success!</h3><p>${message}</p>`;
+      result.innerHTML = `<div class="result-icon" aria-hidden="true">✅</div><h3>Success!</h3><p>${message}</p>`;
+      AudioPrompts.speak('You got it right! Welcome!');
       setTimeout(() => this.elements.onAuthSuccess?.(), 2000);
     } else {
-      // Trigger background pulse on failure
       document.body.classList.add('login-failed-pulse');
-      setTimeout(() => {
-        document.body.classList.remove('login-failed-pulse');
-      }, 1000);
+      setTimeout(() => document.body.classList.remove('login-failed-pulse'), 1000);
       
       result.classList.add('failure');
-      result.innerHTML = `<div class="result-icon">❌</div><h3>Try Again!</h3><p>${message}</p>
+      result.innerHTML = `<div class="result-icon" aria-hidden="true">❌</div><h3>Try Again!</h3><p>${message}</p>
         <button type="button" id="retry-auth-btn" class="retry-button">Start Over</button>`;
+      AudioPrompts.speak('Oops! That was not right. Try again!');
       result.querySelector('#retry-auth-btn')?.addEventListener('click', () => this.reset());
     }
   }
@@ -620,6 +800,8 @@ class RegistrationFlow {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           this.handleImageSelection(image.imageId);
+        } else {
+          this._handleGridArrowKey(e, grid);
         }
       });
       
@@ -627,6 +809,24 @@ class RegistrationFlow {
     });
     
     this.elements.availableImagesContainer.classList.remove('hidden');
+    grid.querySelector('[tabindex="0"]')?.focus();
+    AudioPrompts.speak('Pick your password animal! Use arrow keys or click.');
+  }
+
+  _handleGridArrowKey(e, grid) {
+    const items = Array.from(grid.querySelectorAll('[role="button"]'));
+    const idx = items.indexOf(document.activeElement);
+    if (idx === -1) return;
+    const cols = 3;
+    let next = -1;
+    if (e.key === 'ArrowRight') next = idx + 1;
+    else if (e.key === 'ArrowLeft') next = idx - 1;
+    else if (e.key === 'ArrowDown') next = idx + cols;
+    else if (e.key === 'ArrowUp') next = idx - cols;
+    if (next >= 0 && next < items.length) {
+      e.preventDefault();
+      items[next].focus();
+    }
   }
 
   handleImageSelection(imageId) {
@@ -779,11 +979,14 @@ class RegistrationFlow {
   async submitRegistration() {
     const userId = this.elements.userIdInput.value.trim();
     
-    if (!userId) {
-      this.showError('Please enter your name!');
+    const usernameError = Validator.validateUsername(userId);
+    if (usernameError) {
+      this.showError(usernameError);
       this.elements.userIdInput.focus();
+      this.elements.userIdInput.setAttribute('aria-invalid', 'true');
       return;
     }
+    this.elements.userIdInput.setAttribute('aria-invalid', 'false');
     
     if (!this.selectedImageId || !this.selectedColor || !this.selectedNumber) {
       this.showError('Please complete all steps!');
@@ -792,13 +995,14 @@ class RegistrationFlow {
 
     try {
       await this.db.createUser(userId, this.selectedImageId, this.selectedColor, this.selectedNumber, this.selectedTeacher);
-      this.showRegistrationResult(true, `Welcome, ${userId}! Your profile is ready!`);
+      this.showRegistrationResult(true, `Welcome, ${userId}! Your login is ready!`);
     } catch (error) {
       if (error.message === 'User already exists') {
-        this.showError("That name is already taken! Please choose a different name.");
+        this.showError(`"${userId}" is already taken. Try a different name!`);
+        this.elements.userIdInput.setAttribute('aria-invalid', 'true');
         this.elements.userIdInput.focus();
       } else {
-        this.showError("Oops! Something went wrong. Let's try again!");
+        this.showError("Something went wrong. Let's try again!");
       }
     }
   }
@@ -1036,7 +1240,8 @@ class App {
     this.elements = this.getDOMElements();
     this.initializeFlows();
     this.setupEventListeners();
-    this.checkExistingSession();
+    // Wait for DB to be ready before checking session
+    this.db.ready.then(() => this.checkExistingSession());
   }
 
   getDOMElements() {
@@ -1228,14 +1433,53 @@ class App {
   }
 
   checkExistingSession() {
-    const token = sessionStorage.getItem('authToken');
-    const userId = sessionStorage.getItem('userId');
-    
-    if (token && userId) {
-      this.showDashboard();
+    const session = SessionManager.get();
+    if (session) {
+      if (session.role === 'teacher') {
+        // Restore teacher session
+        const teacher = this.db.getTeacherByUsername(session.userId);
+        if (teacher) {
+          this.teacherPortal.currentTeacher = teacher;
+          this.showTeacherPortal();
+          this.teacherPortal.showDashboard();
+        } else {
+          SessionManager.destroy();
+          this.showLogin();
+        }
+      } else {
+        this.showDashboard();
+      }
     } else {
-      this.showLogin();
+      // Legacy fallback
+      const token = sessionStorage.getItem('authToken');
+      const userId = sessionStorage.getItem('userId');
+      if (token && userId) {
+        SessionManager.create(userId, 'student');
+        this.showDashboard();
+      } else {
+        this.showLogin();
+      }
     }
+
+    // Listen for inactivity timeout
+    window.addEventListener('session-timeout', (e) => {
+      const role = e.detail?.role;
+      this._showTimeoutBanner(role);
+      this.logout(true);
+    });
+
+    // Touch session on user activity
+    ['click', 'keydown', 'touchstart'].forEach(evt => {
+      document.addEventListener(evt, () => SessionManager.touch(), { passive: true });
+    });
+  }
+
+  _showTimeoutBanner(role) {
+    const banner = document.createElement('div');
+    banner.className = 'timeout-banner';
+    banner.innerHTML = `<span>⏱️ You were logged out due to inactivity.</span>`;
+    document.body.appendChild(banner);
+    setTimeout(() => banner.remove(), 5000);
   }
 
   showLogin() {
@@ -1257,11 +1501,24 @@ class App {
 
   showDashboard() {
     this.hideAllViews();
-    const userId = sessionStorage.getItem('userId');
+    const session = SessionManager.get();
+    const userId = session?.userId || sessionStorage.getItem('userId');
     this.elements.welcomeMessage.textContent = userId ? `Welcome back, ${userId}! 👋` : 'Welcome! 👋';
+
+    // Show last login info
+    const lastLogin = userId ? SessionManager.getLastLogin(userId) : null;
+    const lastLoginEl = document.getElementById('last-login-info');
+    if (lastLoginEl && lastLogin) {
+      const prev = new Date(lastLogin);
+      // Only show if there's a previous session (not the current one)
+      const session = SessionManager.get();
+      if (session && session.loginTime !== lastLogin) {
+        lastLoginEl.textContent = `Last login: ${prev.toLocaleString()}`;
+        lastLoginEl.classList.remove('hidden');
+      }
+    }
+
     this.elements.dashboardView.classList.remove('hidden');
-    
-    // Start a new game when showing dashboard
     if (this.memoryGame) {
       this.memoryGame.startNewGame();
     }
@@ -1296,14 +1553,36 @@ class App {
     }
   }
 
-  logout() {
-    this.clearSession();
+  logout(timedOut = false) {
+    SessionManager.destroy(timedOut ? 'SESSION_TIMEOUT' : 'LOGOUT');
     this.showLogin();
   }
 
   clearSession() {
-    sessionStorage.removeItem('authToken');
-    sessionStorage.removeItem('userId');
+    SessionManager.destroy();
+  }
+}
+
+// ============================================================================
+// AUDIO PROMPTS
+// ============================================================================
+
+class AudioPrompts {
+  static speak(text, priority = 'polite') {
+    if (localStorage.getItem('bteam_accessibility_settings')) {
+      try {
+        const s = JSON.parse(localStorage.getItem('bteam_accessibility_settings'));
+        if (s.audio !== 'on') return;
+      } catch { return; }
+    } else {
+      return; // default off
+    }
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.rate = 0.9;
+    utt.pitch = 1.1;
+    window.speechSynthesis.speak(utt);
   }
 }
 
@@ -1325,7 +1604,9 @@ class AccessibilitySettings {
       theme: 'auto',
       textSize: 'normal',
       animations: 'on',
-      contrast: 'normal'
+      contrast: 'normal',
+      font: 'default',
+      audio: 'off'
     };
   }
 
@@ -1336,19 +1617,19 @@ class AccessibilitySettings {
   applySettings() {
     const body = document.body;
     
-    // Remove all theme classes
     body.classList.remove('theme-dark', 'theme-light', 'theme-auto');
     body.classList.remove('text-small', 'text-normal', 'text-large', 'text-xlarge');
     body.classList.remove('animations-on', 'animations-off');
     body.classList.remove('contrast-normal', 'contrast-high');
+    body.classList.remove('font-default', 'font-dyslexia');
     
-    // Apply current settings
     if (this.settings.theme !== 'auto') {
       body.classList.add(`theme-${this.settings.theme}`);
     }
     body.classList.add(`text-${this.settings.textSize}`);
     body.classList.add(`animations-${this.settings.animations}`);
     body.classList.add(`contrast-${this.settings.contrast}`);
+    body.classList.add(`font-${this.settings.font || 'default'}`);
   }
 
   setupEventListeners() {
@@ -1408,17 +1689,57 @@ class AccessibilitySettings {
       });
     });
     
+    // Font buttons
+    ['default', 'dyslexia'].forEach(font => {
+      const btn = document.getElementById(`font-${font}`);
+      btn?.addEventListener('click', () => {
+        this.setSetting('font', font);
+        this.updateActiveButton('font', font);
+      });
+    });
+
+    // Audio prompt buttons
+    ['off', 'on'].forEach(state => {
+      const btn = document.getElementById(`audio-${state}`);
+      btn?.addEventListener('click', () => {
+        this.setSetting('audio', state);
+        this.updateActiveButton('audio', state);
+        if (state === 'on') AudioPrompts.speak('Audio prompts are now on!');
+      });
+    });
+
     // Reset button
     const resetBtn = document.getElementById('reset-settings');
     resetBtn?.addEventListener('click', () => {
       this.resetSettings();
     });
+
+    // Privacy mode toggle
+    const privacyBtn = document.getElementById('privacy-mode-btn');
+    privacyBtn?.addEventListener('click', () => {
+      const current = localStorage.getItem('bteam_privacy_mode') === 'true';
+      const next = !current;
+      localStorage.setItem('bteam_privacy_mode', String(next));
+      document.body.classList.toggle('privacy-mode', next);
+      privacyBtn.classList.toggle('active', next);
+      privacyBtn.textContent = next ? '🙈 Privacy Mode: On' : '👁️ Privacy Mode: Off';
+    });
+
+    // Init privacy mode state
+    const privacyActive = localStorage.getItem('bteam_privacy_mode') === 'true';
+    document.body.classList.toggle('privacy-mode', privacyActive);
+    if (privacyBtn) {
+      privacyBtn.classList.toggle('active', privacyActive);
+      privacyBtn.textContent = privacyActive ? '🙈 Privacy Mode: On' : '👁️ Privacy Mode: Off';
+    }
     
     // Initialize active buttons
     this.updateActiveButton('theme', this.settings.theme);
     this.updateActiveButton('text', this.settings.textSize);
     this.updateActiveButton('animations', this.settings.animations);
     this.updateActiveButton('contrast', this.settings.contrast);
+    this.updateActiveButton('font', this.settings.font || 'default');
+    this.updateActiveButton('audio', this.settings.audio || 'off');
   }
 
   setSetting(key, value) {
@@ -1443,16 +1764,19 @@ class AccessibilitySettings {
       theme: 'auto',
       textSize: 'normal',
       animations: 'on',
-      contrast: 'normal'
+      contrast: 'normal',
+      font: 'default',
+      audio: 'off'
     };
     this.saveSettings();
     this.applySettings();
     
-    // Update UI
     this.updateActiveButton('theme', 'auto');
     this.updateActiveButton('text', 'normal');
     this.updateActiveButton('animations', 'on');
     this.updateActiveButton('contrast', 'normal');
+    this.updateActiveButton('font', 'default');
+    this.updateActiveButton('audio', 'off');
   }
 }
 
@@ -1533,6 +1857,9 @@ class TeacherPortal {
   }
 
   async login(username, password) {
+    // Ensure default teacher is seeded before attempting login
+    await this.db.ready;
+
     console.log('=== LOGIN ATTEMPT ===');
     console.log('Username:', username);
     console.log('Password length:', password?.length);
@@ -1544,15 +1871,14 @@ class TeacherPortal {
     }
     
     // Validate inputs
-    if (!username || username === '') {
-      console.log('Username is empty');
-      this.showLoginError('Please enter a username');
+    const usernameError = Validator.validateTeacherUsername(username);
+    if (usernameError) {
+      this.showLoginError(usernameError);
       return;
     }
-    
-    if (!password || password === '') {
-      console.log('Password is empty');
-      this.showLoginError('Please enter a password');
+    const passwordError = Validator.validateTeacherPassword(password);
+    if (passwordError) {
+      this.showLoginError(passwordError);
       return;
     }
     
@@ -1580,6 +1906,7 @@ class TeacherPortal {
     // Login successful
     console.log('Login successful!');
     this.currentTeacher = teacher;
+    SessionManager.create(username, 'teacher');
     sessionStorage.setItem('teacherToken', username);
     this.showDashboard();
   }
@@ -1624,72 +1951,120 @@ class TeacherPortal {
     
     console.log('Loading students...');
     this.loadStudents();
+    this.renderAuditLog();
   }
 
-  loadStudents() {
-    const students = this.db.getUsersByTeacher(this.currentTeacher.username);
+  loadStudents(filterQuery = '', showLockedOnly = false) {
+    const allStudents = this.db.getUsersByTeacher(this.currentTeacher.username);
     const studentList = document.getElementById('student-list');
-    
-    if (students.length === 0) {
+    const studentSection = studentList?.closest('.teacher-actions');
+
+    // Inject search/filter controls once
+    if (!document.getElementById('student-search')) {
+      const controls = document.createElement('div');
+      controls.className = 'student-controls';
+      controls.innerHTML = `
+        <input type="search" id="student-search" class="student-search-input"
+          placeholder="Search students..." aria-label="Search students"
+          value="${filterQuery}">
+        <label class="filter-label">
+          <input type="checkbox" id="filter-locked" ${showLockedOnly ? 'checked' : ''}>
+          Show locked only
+        </label>
+        <span id="student-count" class="student-count"></span>
+      `;
+      studentList.before(controls);
+
+      document.getElementById('student-search').addEventListener('input', (e) => {
+        const locked = document.getElementById('filter-locked')?.checked || false;
+        this.loadStudents(e.target.value, locked);
+      });
+      document.getElementById('filter-locked').addEventListener('change', (e) => {
+        const q = document.getElementById('student-search')?.value || '';
+        this.loadStudents(q, e.target.checked);
+      });
+    } else {
+      // Update existing controls
+      document.getElementById('student-search').value = filterQuery;
+      document.getElementById('filter-locked').checked = showLockedOnly;
+    }
+
+    // Filter students
+    const q = filterQuery.toLowerCase();
+    let students = allStudents.filter(s =>
+      !q || s.userId.toLowerCase().includes(q)
+    );
+    if (showLockedOnly) {
+      students = students.filter(s => this.db.isUserLocked(s.userId));
+    }
+
+    const countEl = document.getElementById('student-count');
+    if (countEl) countEl.textContent = `${students.length} student${students.length !== 1 ? 's' : ''}`;
+
+    if (allStudents.length === 0) {
       studentList.innerHTML = '<p class="help-text">No students linked to your account yet.</p>';
+      return;
+    }
+
+    if (students.length === 0) {
+      studentList.innerHTML = '<p class="help-text">No students match your search.</p>';
       return;
     }
 
     studentList.innerHTML = '';
     students.forEach(student => {
-      const studentCard = document.createElement('div');
-      studentCard.className = 'student-card';
-      
       const isLocked = this.db.isUserLocked(student.userId);
-      
-      const lockStatus = isLocked ? '<p class="lock-status">🔒 LOCKED - Too many failed attempts</p>' : '';
-      const unlockButton = isLocked ? '<button class="action-btn unlock-btn-small" data-user="' + student.userId + '">Unlock Account</button>' : '';
-      
-      studentCard.innerHTML = `
+      const failedCount = this.db.getFailedAttemptCount(student.userId);
+      const teacherName = student.teacherUsername
+        ? (this.db.getTeacherByUsername(student.teacherUsername)?.name || student.teacherUsername)
+        : 'None';
+
+      const card = document.createElement('div');
+      card.className = 'student-card' + (isLocked ? ' student-card--locked' : '');
+      card.setAttribute('role', 'article');
+      card.setAttribute('aria-label', `Student: ${student.userId}`);
+
+      card.innerHTML = `
         <div class="student-info">
-          <h4>${student.userId}</h4>
-          ${lockStatus}
+          <h4>${this._escapeHtml(student.userId)}</h4>
+          ${isLocked ? '<p class="lock-status" role="alert">🔒 Locked — too many failed attempts</p>' : ''}
+          ${failedCount > 0 && !isLocked ? `<p class="failed-count">⚠️ ${failedCount} failed attempt${failedCount !== 1 ? 's' : ''}</p>` : ''}
+          <p class="help-text">Teacher: <strong>${this._escapeHtml(teacherName)}</strong></p>
           <p class="help-text">Created: ${new Date(student.createdAt).toLocaleDateString()}</p>
         </div>
         <div class="student-actions">
-          ${unlockButton}
-          <button class="action-btn reset-btn-small" data-user="${student.userId}">Reset Password</button>
-          <button class="action-btn delete-btn-small" data-user="${student.userId}">Delete</button>
+          ${isLocked ? `<button class="action-btn unlock-btn-small" data-user="${this._escapeHtml(student.userId)}" aria-label="Unlock ${this._escapeHtml(student.userId)}">Unlock</button>` : ''}
+          <button class="action-btn reset-btn-small" data-user="${this._escapeHtml(student.userId)}" aria-label="Reset password for ${this._escapeHtml(student.userId)}">Reset Password</button>
+          <button class="action-btn delete-btn-small" data-user="${this._escapeHtml(student.userId)}" aria-label="Delete ${this._escapeHtml(student.userId)}">Delete</button>
         </div>
       `;
-      
-      studentList.appendChild(studentCard);
+      studentList.appendChild(card);
     });
 
-    // Add event listeners
     studentList.querySelectorAll('.unlock-btn-small').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const userId = e.target.dataset.user;
-        this.unlockStudent(userId);
-      });
+      btn.addEventListener('click', () => this.unlockStudent(btn.dataset.user));
     });
-
     studentList.querySelectorAll('.reset-btn-small').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const userId = e.target.dataset.user;
-        this.resetStudentPassword(userId);
-      });
+      btn.addEventListener('click', () => this.resetStudentPassword(btn.dataset.user));
     });
-
     studentList.querySelectorAll('.delete-btn-small').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const userId = e.target.dataset.user;
-        if (confirm(`Are you sure you want to delete ${userId}?`)) {
-          this.deleteStudent(userId);
+      btn.addEventListener('click', () => {
+        if (confirm(`Delete student "${btn.dataset.user}"? This cannot be undone.`)) {
+          this.deleteStudent(btn.dataset.user);
         }
       });
     });
   }
 
+  _escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
   unlockStudent(userId) {
-    this.db.unlockUser(userId);
-    alert(`${userId}'s account has been unlocked! They can try logging in again.`);
-    this.loadStudents(); // Refresh the list
+    this.db.unlockUser(userId, this.currentTeacher?.username);
+    const q = document.getElementById('student-search')?.value || '';
+    const locked = document.getElementById('filter-locked')?.checked || false;
+    this.loadStudents(q, locked);
   }  resetStudentPassword(userId) {
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
@@ -1778,7 +2153,7 @@ class TeacherPortal {
     // Confirm reset
     modal.querySelector('#confirm-reset')?.addEventListener('click', () => {
       try {
-        this.db.updateUserCredentials(userId, newImageId, newColor, newNumber);
+        this.db.updateUserCredentials(userId, newImageId, newColor, newNumber, this.currentTeacher?.username);
         
         // Hide the form buttons
         modal.querySelector('.modal-actions').classList.add('hidden');
@@ -1802,7 +2177,9 @@ class TeacherPortal {
           if (timeLeft <= 0) {
             clearInterval(countdownInterval);
             modal.remove();
-            this.loadStudents();
+            const q = document.getElementById('student-search')?.value || '';
+            const locked = document.getElementById('filter-locked')?.checked || false;
+            this.loadStudents(q, locked);
           }
         }, 1000);
         
@@ -1819,17 +2196,77 @@ class TeacherPortal {
 
   deleteStudent(userId) {
     try {
-      this.db.deleteUser(userId);
-      alert(`${userId} has been deleted.`);
-      this.loadStudents();
+      this.db.deleteUser(userId, this.currentTeacher?.username);
+      const q = document.getElementById('student-search')?.value || '';
+      const locked = document.getElementById('filter-locked')?.checked || false;
+      this.loadStudents(q, locked);
     } catch (error) {
       alert('Error deleting student: ' + error.message);
     }
   }
 
+  renderAuditLog() {
+    const dashboard = document.getElementById('teacher-dashboard');
+    if (!dashboard) return;
+
+    // Remove existing audit section if re-rendering
+    dashboard.querySelector('.audit-log-section')?.remove();
+
+    const section = document.createElement('div');
+    section.className = 'audit-log-section teacher-actions';
+    section.innerHTML = `
+      <h3>Audit Log</h3>
+      <div class="audit-controls">
+        <button id="audit-refresh-btn" class="action-btn">Refresh</button>
+        <button id="audit-clear-btn" class="action-btn delete-btn-small">Clear Log</button>
+      </div>
+      <div id="audit-log-entries" class="audit-log-entries"></div>
+    `;
+    dashboard.insertBefore(section, document.getElementById('teacher-logout-btn'));
+
+    section.querySelector('#audit-refresh-btn').addEventListener('click', () => this.renderAuditLog());
+    section.querySelector('#audit-clear-btn').addEventListener('click', () => {
+      if (confirm('Clear all audit log entries?')) {
+        AuditLog.clear();
+        this.renderAuditLog();
+      }
+    });
+
+    this._populateAuditEntries();
+  }
+
+  _populateAuditEntries() {
+    const container = document.getElementById('audit-log-entries');
+    if (!container) return;
+    const entries = AuditLog.getRecent(100);
+    if (entries.length === 0) {
+      container.innerHTML = '<p class="help-text">No audit entries yet.</p>';
+      return;
+    }
+    const ACTION_ICONS = {
+      LOGIN: '🔓', LOGOUT: '🔒', SESSION_TIMEOUT: '⏱️',
+      LOGIN_FAILED: '❌', USER_CREATED: '➕', USER_DELETED: '🗑️',
+      PASSWORD_RESET: '🔑', ACCOUNT_UNLOCKED: '🔓'
+    };
+    container.innerHTML = entries.map(e => {
+      const icon = ACTION_ICONS[e.action] || '📋';
+      const time = new Date(e.timestamp).toLocaleString();
+      const detail = e.userId ? `<span class="audit-user">${e.userId}</span>` : '';
+      const extra = e.performedBy ? ` by <span class="audit-user">${e.performedBy}</span>` : '';
+      const attempts = e.attemptCount ? ` (attempt ${e.attemptCount})` : '';
+      return `<div class="audit-entry audit-${e.action.toLowerCase().replace('_','-')}">
+        <span class="audit-icon">${icon}</span>
+        <span class="audit-action">${e.action}</span>
+        ${detail}${extra}${attempts}
+        <span class="audit-time">${time}</span>
+      </div>`;
+    }).join('');
+  }
+
   logout() {
+    AuditLog.log('LOGOUT', { userId: this.currentTeacher?.username, role: 'teacher' });
     this.currentTeacher = null;
-    sessionStorage.removeItem('teacherToken');
+    SessionManager.destroy('LOGOUT');
     document.getElementById('teacher-login-form').classList.remove('hidden');
     document.getElementById('teacher-dashboard').classList.add('hidden');
     document.getElementById('teacher-username').value = '';
